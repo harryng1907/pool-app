@@ -32,7 +32,8 @@
     "db:seed": "node scripts/db.mjs seed",
     "typecheck": "tsc --noEmit",
     "db:functions": "node scripts/db.mjs functions",
-    "build:web": "expo export -p web"
+    "build:web": "expo export -p web",
+    "demo:reset": "node scripts/reset-demo.mjs"
   },
   "private": true
 }

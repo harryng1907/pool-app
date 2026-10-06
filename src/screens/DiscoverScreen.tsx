@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,12 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
+  Animated,
+  PanResponder,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { THEME } from '../theme';
-import { ActivityCard, Nudge } from '../types';
+import { ActivityCard, Nudge, SquadType } from '../types';
 import { formatDuration, formatWhen, SQUAD_TYPE_LABEL } from '../lib/format';
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -18,6 +20,22 @@ const TYPE_ICON: Record<ActivityCard['squad_type'], IconName> = {
   deadline: 'hourglass-outline',
   hobby: 'sparkles',
   career: 'trending-up',
+};
+
+// "Pick what kind of squad you want" — filter chips on top of the deck.
+const FILTERS: { key: 'all' | SquadType; label: string; icon: IconName }[] = [
+  { key: 'all', label: 'All', icon: 'apps' },
+  { key: 'deadline', label: 'Study', icon: 'hourglass-outline' },
+  { key: 'hobby', label: 'Hobby', icon: 'sparkles' },
+  { key: 'career', label: 'Career', icon: 'trending-up' },
+];
+
+const SWIPE_DISTANCE = 110;
+
+// Fri–Sun in Sydney → "Weekend's here"
+const isWeekend = () => {
+  const day = new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Sydney', weekday: 'short' }).format(new Date());
+  return ['Fri', 'Sat', 'Sun'].includes(day);
 };
 
 const CATEGORY_PLACE: Record<ActivityCard['category'], string> = {
@@ -51,8 +69,44 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
   onRebook,
   onRefresh,
 }) => {
-  const card = cards[0];
+  const [filter, setFilter] = useState<'all' | SquadType>('all');
+  const visible = filter === 'all' ? cards : cards.filter((c) => c.squad_type === filter);
+  const card = visible[0];
   const nudge = nudges[0];
+
+  // Drag the card: right = I'm in, left = Not for me.
+  const pan = useRef(new Animated.Value(0)).current;
+  const latest = useRef({ card, busy, onImIn, onNotForMe });
+  latest.current = { card, busy, onImIn, onNotForMe };
+
+  const responder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) =>
+        !latest.current.busy && Math.abs(g.dx) > 8 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+      onPanResponderMove: (_, g) => pan.setValue(g.dx),
+      onPanResponderRelease: (_, g) => {
+        const { card: c, onImIn: yes, onNotForMe: no } = latest.current;
+        if (c && Math.abs(g.dx) > SWIPE_DISTANCE) {
+          const right = g.dx > 0;
+          Animated.timing(pan, { toValue: right ? 600 : -600, duration: 180, useNativeDriver: false }).start(() =>
+            right ? yes(c) : no(c),
+          );
+        } else {
+          Animated.spring(pan, { toValue: 0, useNativeDriver: false }).start();
+        }
+      },
+      onPanResponderTerminate: () => Animated.spring(pan, { toValue: 0, useNativeDriver: false }).start(),
+    }),
+  ).current;
+
+  // New top card (or a failed swipe) → snap back to the middle.
+  useEffect(() => {
+    if (!busy) pan.setValue(0);
+  }, [card?.id, busy, pan]);
+
+  const rotate = pan.interpolate({ inputRange: [-300, 0, 300], outputRange: ['-12deg', '0deg', '12deg'] });
+  const inOpacity = pan.interpolate({ inputRange: [0, SWIPE_DISTANCE], outputRange: [0, 1], extrapolate: 'clamp' });
+  const nopeOpacity = pan.interpolate({ inputRange: [-SWIPE_DISTANCE, 0], outputRange: [1, 0], extrapolate: 'clamp' });
 
   return (
     <ScrollView
@@ -74,7 +128,7 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.nudgeTitle}>
-              Go again with {nudge.names.join(' & ')}?
+              {isWeekend() ? "Weekend's here! " : ''}Go again with {nudge.names.join(' & ')}?
             </Text>
             <Text style={styles.nudgeSub}>
               You rated them {nudge.top_score}★ after {nudge.activity_title}
@@ -95,20 +149,36 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
       )}
 
       <View style={styles.bannerRow}>
-        <View style={styles.activeBannerPill}>
-          <View style={styles.orangeDot} />
-          <Text style={styles.activeBannerText}>ACTIVITIES FOR YOU</Text>
+        <View style={styles.filterRow}>
+          {FILTERS.map((ft) => {
+            const on = filter === ft.key;
+            return (
+              <TouchableOpacity
+                key={ft.key}
+                style={[styles.filterChip, on && styles.filterChipOn]}
+                onPress={() => setFilter(ft.key)}
+                accessibilityLabel={`Show ${ft.label} activities`}
+              >
+                <Ionicons name={ft.icon} size={14} color={on ? '#FFFFFF' : THEME.colors.deepTeal} />
+                <Text style={[styles.filterText, on && { color: '#FFFFFF' }]}>{ft.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
-        {cards.length > 0 && (
-          <View style={styles.countPill}>
-            <Text style={styles.countText}>{cards.length} left</Text>
-          </View>
-        )}
       </View>
 
       {loading && !card ? (
         <View style={styles.emptyCard}>
           <ActivityIndicator color={THEME.colors.primaryOrange} />
+        </View>
+      ) : !card && cards.length > 0 ? (
+        <View style={styles.emptyCard}>
+          <Ionicons name={FILTERS.find((x) => x.key === filter)!.icon} size={40} color={THEME.colors.textMuted} />
+          <Text style={styles.emptyTitle}>Nothing here right now</Text>
+          <TouchableOpacity style={styles.refreshBtn} onPress={() => setFilter('all')} activeOpacity={0.8}>
+            <Ionicons name="apps" size={16} color={THEME.colors.deepTeal} />
+            <Text style={styles.refreshText}>Show all</Text>
+          </TouchableOpacity>
         </View>
       ) : !card ? (
         <View style={styles.emptyCard}>
@@ -123,9 +193,21 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
       ) : (
         <>
           <View style={styles.cardWrapper}>
-            {cards.length > 1 && <View style={styles.stackCardBack} />}
+            {visible.length > 1 && <View style={styles.stackCardBack} />}
 
-            <View style={styles.card}>
+            <Animated.View
+              style={[styles.card, { transform: [{ translateX: pan }, { rotate }] }]}
+              {...responder.panHandlers}
+            >
+              <Animated.View style={[styles.stamp, styles.stampIn, { opacity: inOpacity }]} pointerEvents="none">
+                <Ionicons name="checkmark-circle" size={20} color={THEME.colors.successGreen} />
+                <Text style={[styles.stampText, { color: THEME.colors.successGreen }]}>I'M IN</Text>
+              </Animated.View>
+              <Animated.View style={[styles.stamp, styles.stampNope, { opacity: nopeOpacity }]} pointerEvents="none">
+                <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+                <Text style={[styles.stampText, { color: '#6B7280' }]}>NOT FOR ME</Text>
+              </Animated.View>
+
               <View style={styles.badgeRow}>
                 <View style={styles.cohortBadge}>
                   <Ionicons
@@ -217,7 +299,7 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
                     : `${card.interested_count} student${card.interested_count === 1 ? '' : 's'} said "I'm in"`}
                 </Text>
               </View>
-            </View>
+            </Animated.View>
           </View>
 
           <View style={styles.actionsContainer}>
@@ -248,7 +330,7 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
 
       <View style={styles.hintContainer}>
         <Text style={styles.hintText}>
-          Swipe on things you'd want to do, not on people.
+          ← Not for me · swipe · I'm in →{'\n'}Things you'd do, not people.
         </Text>
       </View>
     </ScrollView>
@@ -619,5 +701,58 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: THEME.colors.deepTeal,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: 6,
+    flexShrink: 1,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: THEME.radii.pill,
+    backgroundColor: THEME.colors.cardWhite,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+  },
+  filterChipOn: {
+    backgroundColor: THEME.colors.deepTeal,
+    borderColor: THEME.colors.deepTeal,
+  },
+  filterText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: THEME.colors.deepTeal,
+  },
+  stamp: {
+    position: 'absolute',
+    top: 18,
+    zIndex: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    borderWidth: 2,
+    backgroundColor: '#FFFFFFEE',
+  },
+  stampIn: {
+    left: 18,
+    borderColor: THEME.colors.successGreen,
+    transform: [{ rotate: '-8deg' }],
+  },
+  stampNope: {
+    right: 18,
+    borderColor: '#9CA3AF',
+    transform: [{ rotate: '8deg' }],
+  },
+  stampText: {
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
 });
