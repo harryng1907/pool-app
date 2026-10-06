@@ -1,5 +1,6 @@
 // Runs SQL files against the Supabase database.
-//   node scripts/db.mjs setup          → schema.sql + seed.sql
+//   node scripts/db.mjs setup          → schema.sql + functions.sql + seed.sql (wipes data)
+//   node scripts/db.mjs functions      → functions.sql only (keeps data)
 //   node scripts/db.mjs seed           → seed.sql only (resets demo data)
 //   node scripts/db.mjs file <path>    → any SQL file
 // Needs SUPABASE_DB_URL in .env.local (Supabase → Connect → Session pooler).
@@ -20,7 +21,8 @@ if (!url) {
 
 const [cmd = 'setup', arg] = process.argv.slice(2);
 const files =
-  cmd === 'setup' ? ['supabase/schema.sql', 'supabase/seed.sql']
+  cmd === 'setup' ? ['supabase/schema.sql', 'supabase/functions.sql', 'supabase/seed.sql']
+  : cmd === 'functions' ? ['supabase/functions.sql']
   : cmd === 'seed' ? ['supabase/seed.sql']
   : cmd === 'file' ? [arg]
   : [];
@@ -33,7 +35,7 @@ const client = new pg.Client({ connectionString: url, ssl: { rejectUnauthorized:
 await client.connect();
 try {
   for (const file of files) {
-    const sql = readFileSync(path.join(root, file), 'utf8');
+    const sql = readFileSync(path.resolve(root, file), 'utf8');
     process.stdout.write(`Running ${file} … `);
     await client.query('begin');
     await client.query(sql);

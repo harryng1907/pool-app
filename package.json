@@ -30,7 +30,8 @@
     "web": "expo start --web",
     "db:setup": "node scripts/db.mjs setup",
     "db:seed": "node scripts/db.mjs seed",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:functions": "node scripts/db.mjs functions"
   },
   "private": true
 }

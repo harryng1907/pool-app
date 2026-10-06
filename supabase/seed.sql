@@ -292,6 +292,23 @@ insert into public.swipes (user_id, activity_id, decision, created_at)
 select id, act, 'in', now() - make_interval(hours => (random() * 24 * 10)::int)
 from _people, unnest(says_yes) as act;
 
+-- Hobbies: what the demo accounts picked in onboarding; simulated students' come from what they said yes to.
+update public.profiles p set interests = x.i
+from (values
+  ('maya@pool.demo', '{quiet focus,library,matcha,lofi,boba}'::text[]),
+  ('alex@pool.demo', '{badminton,sport,gym,beginner friendly}'::text[]),
+  ('sam@pool.demo',  '{trivia,startups,board games,social}'::text[])
+) x(email, i), _people pe
+where pe.email = x.email and p.id = pe.id;
+
+update public.profiles p set interests = coalesce((
+  select array_agg(distinct t) from (
+    select unnest(a.tags) t from public.swipes s join public.activities a on a.id = s.activity_id
+    where s.user_id = p.id and s.decision = 'in'
+  ) z where t !~ '^[A-Z]{4}[0-9]{4}$' and t not in ('first years','assignment','exam prep','group project','feedback')
+), '{}')
+where p.is_seed;
+
 -- A few "not for me" swipes so interest isn't uniformly positive.
 insert into public.swipes (user_id, activity_id, decision, created_at)
 select p.id, a.id, 'pass', now() - make_interval(hours => (random() * 24 * 10)::int)

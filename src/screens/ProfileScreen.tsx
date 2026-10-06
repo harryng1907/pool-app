@@ -12,12 +12,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { THEME } from '../theme';
 import { Me } from '../types';
 import { yearLabel } from '../lib/format';
+import { INTERESTS } from '../lib/catalog';
 
 interface ProfileScreenProps {
   me: Me | null;
   busy: boolean;
   onResetDemo: () => void;
   onOpenMetrics: () => void;
+  onEditProfile: () => void;
   onSignOut: () => void;
 }
 
@@ -31,6 +33,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   busy,
   onResetDemo,
   onOpenMetrics,
+  onEditProfile,
   onSignOut,
 }) => {
   if (!me) {
@@ -89,8 +92,31 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </View>
       </View>
 
+      {me.interests.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>My vibe</Text>
+          <View style={styles.interestWrap}>
+            {me.interests.map((tag) => {
+              const it = INTERESTS.find((i) => i.tag === tag);
+              return (
+                <View key={tag} style={styles.interestChip}>
+                  <Ionicons name={it?.icon ?? 'sparkles'} size={14} color={THEME.colors.primaryOrange} />
+                  <Text style={styles.interestText}>{it?.label ?? tag}</Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>What the matcher knows</Text>
+        <View style={styles.cardTitleRow}>
+          <Text style={[styles.cardTitle, { marginBottom: 0 }]}>What the matcher knows</Text>
+          <TouchableOpacity style={styles.editBtn} onPress={onEditProfile} accessibilityLabel="Edit profile">
+            <Ionicons name="pencil" size={14} color={THEME.colors.deepTeal} />
+            <Text style={styles.editText}>Edit</Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.prefItem}>
           <View style={styles.prefIconBox}>
@@ -435,5 +461,44 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '800',
+  },
+  interestWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  interestChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: THEME.colors.primaryOrangeLight,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: THEME.radii.tag,
+  },
+  interestText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: THEME.colors.textPrimary,
+  },
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  editBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: THEME.radii.pill,
+    backgroundColor: THEME.colors.deepTealLight,
+  },
+  editText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: THEME.colors.deepTeal,
   },
 });

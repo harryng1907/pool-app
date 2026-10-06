@@ -13,9 +13,10 @@ import { THEME } from '../theme';
 
 interface MatchingOverlayProps {
   visible: boolean;
+  tags?: string[];
 }
 
-export const MatchingOverlay: React.FC<MatchingOverlayProps> = ({ visible }) => {
+export const MatchingOverlay: React.FC<MatchingOverlayProps> = ({ visible, tags = [] }) => {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
 
@@ -82,24 +83,24 @@ export const MatchingOverlay: React.FC<MatchingOverlayProps> = ({ visible }) => 
           </Animated.View>
 
           <Text style={styles.titleText}>AI assembling your squad...</Text>
-          <Text style={styles.subtitleText}>
-            Matching schedules, course codes & study vibe
-          </Text>
+          <View style={styles.stepsRow}>
+            {(['calendar', 'school', 'heart', 'location'] as const).map((icon) => (
+              <View key={icon} style={styles.stepIcon}>
+                <Ionicons name={icon} size={16} color={THEME.colors.deepTeal} />
+              </View>
+            ))}
+          </View>
 
           <View style={styles.spinnerContainer}>
             <ActivityIndicator size="large" color={THEME.colors.primaryOrange} />
           </View>
 
           <View style={styles.tagsRow}>
-            <View style={styles.miniBadge}>
-              <Text style={styles.miniBadgeText}>COMP1511</Text>
-            </View>
-            <View style={styles.miniBadge}>
-              <Text style={styles.miniBadgeText}>Quiet Focus</Text>
-            </View>
-            <View style={styles.miniBadge}>
-              <Text style={styles.miniBadgeText}>UNSW 1st Yr</Text>
-            </View>
+            {tags.map((tag) => (
+              <View key={tag} style={styles.miniBadge}>
+                <Text style={styles.miniBadgeText}>{tag}</Text>
+              </View>
+            ))}
           </View>
         </View>
       </View>
@@ -170,5 +171,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: THEME.colors.deepTeal,
+  },
+  stepsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  stepIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: THEME.colors.deepTealLight,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

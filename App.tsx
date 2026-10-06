@@ -18,6 +18,7 @@ import { RateScreen } from './src/screens/RateScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { MetricsScreen } from './src/screens/MetricsScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
+import { OnboardingScreen } from './src/screens/OnboardingScreen';
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong');
 
@@ -39,7 +40,9 @@ function MainApp({ session }: { session: Session }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [matching, setMatching] = useState(false);
+  const [matchingTags, setMatchingTags] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
+  const [editingProfile, setEditingProfile] = useState(false);
 
   const loadSquads = useCallback(async () => {
     const [s, n] = await Promise.all([api.getMySquads(), api.getNudges()]);
@@ -90,6 +93,7 @@ function MainApp({ session }: { session: Session }) {
 
   const handleImIn = async (card: ActivityCard) => {
     setBusy(true);
+    setMatchingTags([card.course, ...card.tags].filter((t): t is string => !!t).slice(0, 3));
     setMatching(true);
     setNotice(null);
     try {
@@ -121,6 +125,7 @@ function MainApp({ session }: { session: Session }) {
 
   const handleRebook = async (nudge: Nudge) => {
     setBusy(true);
+    setMatchingTags(['Rated ' + nudge.top_score + '★', ...nudge.names].slice(0, 3));
     setMatching(true);
     setNotice(null);
     try {
@@ -189,6 +194,26 @@ function MainApp({ session }: { session: Session }) {
   };
 
   // --- Render --------------------------------------------------------
+
+  // New accounts (and "Edit profile") get the onboarding flow full-screen.
+  if (me && (!me.onboarded || editingProfile)) {
+    return (
+      <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+        <StatusBar style="dark" />
+        <OnboardingScreen
+          me={me}
+          editing={me.onboarded}
+          onCancel={me.onboarded ? () => setEditingProfile(false) : undefined}
+          onDone={(updated) => {
+            setMe(updated);
+            setEditingProfile(false);
+            api.getDeck().then(setCards).catch(() => {});
+            go('discover', 'discover');
+          }}
+        />
+      </View>
+    );
+  }
 
   const openSquadData = squads.find((s) => s.id === openSquadId) ?? null;
   const needsAction = squads.filter(
@@ -265,6 +290,7 @@ function MainApp({ session }: { session: Session }) {
         busy={busy}
         onResetDemo={handleResetDemo}
         onOpenMetrics={() => go('profile', 'metrics')}
+        onEditProfile={() => setEditingProfile(true)}
         onSignOut={() => api.signOut()}
       />
     );
@@ -295,7 +321,7 @@ function MainApp({ session }: { session: Session }) {
         avatarColor={me?.avatar_color}
       />
       <View style={styles.screenContainer}>{body}</View>
-      <MatchingOverlay visible={matching} />
+      <MatchingOverlay visible={matching} tags={matchingTags} />
       <BottomNav
         activeTab={activeTab}
         onSelectTab={handleSelectTab}

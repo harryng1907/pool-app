@@ -1,19 +1,56 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, ActivityIndicator, ScrollView } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+  ActivityIndicator,
+  ScrollView,
+  TextInput,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { THEME } from '../theme';
-import { DEMO_ACCOUNTS, signInDemo } from '../lib/api';
+import { DEMO_ACCOUNTS, isUnswEmail, signIn, signInDemo, signUp } from '../lib/api';
 
-// Demo sign-in. Accounts are real Supabase users; sign-up is restricted to UNSW emails in the database.
+type Mode = 'join' | 'login';
+
+// Join / log in with a UNSW email, or jump in as a demo student.
+// UNSW-only is enforced again by a database trigger, not just here.
 export const LoginScreen: React.FC = () => {
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<Mode>('join');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [checkInbox, setCheckInbox] = useState(false);
 
-  const signIn = async (email: string) => {
-    setPending(email);
+  const canSubmit =
+    isUnswEmail(email) && password.length >= 8 && (mode === 'login' || name.trim().length >= 2);
+
+  const submit = async () => {
+    setPending('form');
     setError(null);
     try {
-      await signInDemo(email);
+      if (mode === 'join') {
+        const signedIn = await signUp(email, password, name);
+        if (!signedIn) setCheckInbox(true);
+      } else {
+        await signIn(email, password);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setPending(null);
+    }
+  };
+
+  const demo = async (demoEmail: string) => {
+    setPending(demoEmail);
+    setError(null);
+    try {
+      await signInDemo(demoEmail);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not sign in');
       setPending(null);
@@ -21,12 +58,9 @@ export const LoginScreen: React.FC = () => {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Image source={require('../../assets/logo_dark.png')} style={styles.logo} resizeMode="contain" />
       <Text style={styles.title}>Make the first move{'\n'}without making it.</Text>
-      <Text style={styles.subtitle}>
-        Swipe on things you'd want to do. We'll put you in a squad of 2–4 UNSW students with a time and a place.
-      </Text>
 
       <View style={styles.pillsRow}>
         <View style={styles.pill}>
@@ -35,20 +69,141 @@ export const LoginScreen: React.FC = () => {
         </View>
         <View style={styles.pill}>
           <Ionicons name="eye-off" size={14} color={THEME.colors.deepTeal} />
-          <Text style={styles.pillText}>No profile browsing</Text>
+          <Text style={styles.pillText}>No browsing</Text>
+        </View>
+        <View style={styles.pill}>
+          <Ionicons name="people" size={14} color={THEME.colors.deepTeal} />
+          <Text style={styles.pillText}>Squads of 2–4</Text>
         </View>
         <View style={styles.pill}>
           <Ionicons name="location" size={14} color={THEME.colors.deepTeal} />
-          <Text style={styles.pillText}>Public venues</Text>
+          <Text style={styles.pillText}>Public spots</Text>
         </View>
       </View>
 
-      <Text style={styles.sectionLabel}>CONTINUE AS A DEMO STUDENT</Text>
+      {checkInbox ? (
+        <View style={styles.inboxBox}>
+          <Ionicons name="mail-unread" size={32} color={THEME.colors.deepTeal} />
+          <Text style={styles.inboxTitle}>Check your UNSW inbox</Text>
+          <Text style={styles.inboxSub}>Tap the link we sent to {email.trim()}, then log in.</Text>
+          <TouchableOpacity
+            onPress={() => {
+              setCheckInbox(false);
+              setMode('login');
+            }}
+          >
+            <Text style={styles.link}>Go to log in</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.formCard}>
+          <View style={styles.segment}>
+            {(['join', 'login'] as Mode[]).map((m) => (
+              <TouchableOpacity
+                key={m}
+                style={[styles.segmentBtn, mode === m && styles.segmentOn]}
+                onPress={() => {
+                  setMode(m);
+                  setError(null);
+                }}
+              >
+                <Ionicons
+                  name={m === 'join' ? 'person-add' : 'log-in'}
+                  size={16}
+                  color={mode === m ? '#FFFFFF' : THEME.colors.textSecondary}
+                />
+                <Text style={[styles.segmentText, mode === m && { color: '#FFFFFF' }]}>
+                  {m === 'join' ? 'Join' : 'Log in'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {mode === 'join' && (
+            <View style={styles.inputRow}>
+              <Ionicons name="person-outline" size={18} color={THEME.colors.textMuted} />
+              <TextInput
+                style={styles.input}
+                placeholder="First name"
+                placeholderTextColor={THEME.colors.textMuted}
+                value={name}
+                onChangeText={setName}
+                autoCapitalize="words"
+              />
+            </View>
+          )}
+
+          <View style={styles.inputRow}>
+            <Ionicons name="mail-outline" size={18} color={THEME.colors.textMuted} />
+            <TextInput
+              style={styles.input}
+              placeholder="zID@ad.unsw.edu.au"
+              placeholderTextColor={THEME.colors.textMuted}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoComplete="email"
+            />
+            {email.length > 3 && (
+              <Ionicons
+                name={isUnswEmail(email) ? 'checkmark-circle' : 'alert-circle'}
+                size={18}
+                color={isUnswEmail(email) ? THEME.colors.successGreen : '#F59E0B'}
+              />
+            )}
+          </View>
+
+          <View style={styles.inputRow}>
+            <Ionicons name="lock-closed-outline" size={18} color={THEME.colors.textMuted} />
+            <TextInput
+              style={styles.input}
+              placeholder="Password (8+ characters)"
+              placeholderTextColor={THEME.colors.textMuted}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoComplete={mode === 'join' ? 'new-password' : 'current-password'}
+              onSubmitEditing={() => canSubmit && submit()}
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.primaryBtn, (!canSubmit || pending !== null) && { opacity: 0.45 }]}
+            disabled={!canSubmit || pending !== null}
+            onPress={submit}
+            activeOpacity={0.85}
+          >
+            {pending === 'form' ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <>
+                <Text style={styles.primaryText}>{mode === 'join' ? 'Create account' : 'Log in'}</Text>
+                <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {error && (
+        <View style={styles.errorBox}>
+          <Ionicons name="alert-circle" size={16} color="#DC2626" />
+          <Text style={styles.error}>{error}</Text>
+        </View>
+      )}
+
+      <View style={styles.orRow}>
+        <View style={styles.orLine} />
+        <Text style={styles.orText}>or try a demo student</Text>
+        <View style={styles.orLine} />
+      </View>
+
       {DEMO_ACCOUNTS.map((account) => (
         <TouchableOpacity
           key={account.email}
           style={styles.accountRow}
-          onPress={() => signIn(account.email)}
+          onPress={() => demo(account.email)}
           disabled={pending !== null}
           activeOpacity={0.8}
         >
@@ -66,12 +221,6 @@ export const LoginScreen: React.FC = () => {
           )}
         </TouchableOpacity>
       ))}
-
-      {error && <Text style={styles.error}>{error}</Text>}
-
-      <Text style={styles.footnote}>
-        Real sign-up uses your UNSW email (zID@ad.unsw.edu.au). Other domains are rejected by the database.
-      </Text>
     </ScrollView>
   );
 };
@@ -83,7 +232,8 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 24,
-    paddingTop: 40,
+    paddingTop: 32,
+    paddingBottom: 40,
     maxWidth: 480,
     width: '100%',
     alignSelf: 'center',
@@ -91,7 +241,7 @@ const styles = StyleSheet.create({
   logo: {
     width: 110,
     height: 40,
-    marginBottom: 28,
+    marginBottom: 20,
   },
   title: {
     fontSize: 30,
@@ -100,18 +250,12 @@ const styles = StyleSheet.create({
     letterSpacing: -0.6,
     lineHeight: 36,
   },
-  subtitle: {
-    fontSize: 15,
-    color: THEME.colors.textSecondary,
-    lineHeight: 22,
-    marginTop: 12,
-  },
   pillsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginTop: 18,
-    marginBottom: 32,
+    marginTop: 16,
+    marginBottom: 20,
   },
   pill: {
     flexDirection: 'row',
@@ -127,12 +271,120 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: THEME.colors.deepTeal,
   },
-  sectionLabel: {
-    fontSize: 11,
+  formCard: {
+    backgroundColor: THEME.colors.cardWhite,
+    borderRadius: 24,
+    padding: 16,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    ...THEME.shadows.card,
+  },
+  segment: {
+    flexDirection: 'row',
+    backgroundColor: THEME.colors.grayButton,
+    borderRadius: THEME.radii.pill,
+    padding: 4,
+    marginBottom: 4,
+  },
+  segmentBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    borderRadius: THEME.radii.pill,
+  },
+  segmentOn: {
+    backgroundColor: THEME.colors.deepTeal,
+  },
+  segmentText: {
+    fontSize: 14,
     fontWeight: '800',
+    color: THEME.colors.textSecondary,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FAFAF8',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    paddingHorizontal: 12,
+  },
+  input: {
+    flex: 1,
+    paddingVertical: 13,
+    fontSize: 15,
+    color: THEME.colors.textPrimary,
+  },
+  primaryBtn: {
+    height: 52,
+    borderRadius: THEME.radii.pill,
+    backgroundColor: THEME.colors.primaryOrange,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  primaryText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  inboxBox: {
+    backgroundColor: THEME.colors.deepTealLight,
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    gap: 6,
+  },
+  inboxTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: THEME.colors.deepTealDark,
+  },
+  inboxSub: {
+    fontSize: 14,
+    color: THEME.colors.textSecondary,
+    textAlign: 'center',
+  },
+  link: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: THEME.colors.deepTeal,
+    marginTop: 8,
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 12,
+  },
+  error: {
+    flex: 1,
+    color: '#DC2626',
+    fontSize: 13,
+  },
+  orRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 24,
+    marginBottom: 12,
+  },
+  orLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: THEME.colors.border,
+  },
+  orText: {
+    fontSize: 12,
+    fontWeight: '700',
     color: THEME.colors.textMuted,
-    letterSpacing: 0.8,
-    marginBottom: 10,
   },
   accountRow: {
     flexDirection: 'row',
@@ -140,43 +392,31 @@ const styles = StyleSheet.create({
     gap: 14,
     backgroundColor: THEME.colors.cardWhite,
     borderRadius: 20,
-    padding: 14,
-    marginBottom: 10,
+    padding: 12,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: THEME.colors.border,
-    ...THEME.shadows.card,
   },
   avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
     color: '#FFFFFF',
     fontWeight: '800',
-    fontSize: 16,
+    fontSize: 15,
   },
   accountName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: THEME.colors.textPrimary,
   },
   accountBlurb: {
-    fontSize: 13,
+    fontSize: 12,
     color: THEME.colors.textSecondary,
     marginTop: 2,
-  },
-  error: {
-    color: '#DC2626',
-    fontSize: 13,
-    marginTop: 8,
-  },
-  footnote: {
-    fontSize: 12,
-    color: THEME.colors.textMuted,
-    marginTop: 20,
-    lineHeight: 17,
   },
 });

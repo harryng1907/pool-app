@@ -1,7 +1,7 @@
 // Every call the app makes to the backend lives here.
 // Business logic (matching, privacy, scheduling) runs in Postgres — see supabase/schema.sql.
 import { supabase } from './supabase';
-import { ActivityCard, Me, Metrics, Nudge, Squad } from '../types';
+import { ActivityCard, Me, Metrics, Nudge, ProfileInput, Squad } from '../types';
 
 async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.rpc(fn, args);
@@ -23,6 +23,29 @@ export async function signInDemo(email: string) {
   if (error) throw new Error(error.message);
 }
 
+const UNSW_EMAIL = /@([a-z0-9-]+\.)*unsw\.edu\.au$/i;
+export const isUnswEmail = (email: string) => UNSW_EMAIL.test(email.trim());
+
+/** Create an account. Returns true if signed in straight away, false if a confirmation email was sent. */
+export async function signUp(email: string, password: string, name: string): Promise<boolean> {
+  if (!isUnswEmail(email)) throw new Error('Use your UNSW email (e.g. z1234567@ad.unsw.edu.au)');
+  const { data, error } = await supabase.auth.signUp({
+    email: email.trim(),
+    password,
+    options: {
+      data: { name: name.trim() },
+      emailRedirectTo: typeof window !== 'undefined' && window.location ? window.location.origin : undefined,
+    },
+  });
+  if (error) throw new Error(error.message.includes('Database error') ? 'Pool is only open to UNSW emails.' : error.message);
+  return !!data.session;
+}
+
+export async function signIn(email: string, password: string) {
+  const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+  if (error) throw new Error(error.message === 'Email not confirmed' ? 'Check your UNSW inbox and confirm your email first.' : error.message);
+}
+
 export async function signOut() {
   await supabase.auth.signOut();
 }
@@ -30,6 +53,8 @@ export async function signOut() {
 // --- Profile ----------------------------------------------------------
 
 export const getMe = () => rpc<Me | null>('get_me');
+
+export const saveProfile = (input: ProfileInput) => rpc<Me>('save_profile', { p: input });
 
 // --- Deck -------------------------------------------------------------
 

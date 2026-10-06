@@ -96,6 +96,7 @@ export interface Me {
   vibe: string | null;
   status_quote: string | null;
   group_pref: 'one' | 'small' | 'any';
+  interests: string[];
   onboarded: boolean;
   email: string;
   courses: string[];
@@ -113,4 +114,18 @@ export interface Metrics {
     weekly_active: number;
   };
   cohorts: { week: string; signed_up: number; active_week_1: number }[];
+}
+
+// Sent to save_profile — every field optional
+export interface ProfileInput {
+  full_name?: string;
+  degree?: string;
+  degree_short?: string;
+  year?: number;
+  group_pref?: 'one' | 'small' | 'any';
+  vibe?: string;
+  status_quote?: string;
+  interests?: string[];
+  courses?: string[];
+  availability?: { dow: number; start: number; end: number }[];
 }
