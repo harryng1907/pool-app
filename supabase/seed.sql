@@ -318,3 +318,72 @@ from _people p cross join lateral (
   order by md5(a.id || p.email) limit 3
 ) a
 where p.is_seed;
+
+-- ---------------------------------------------------------------------
+-- Simulated history (last ~2 weeks) so the metrics screen has a realistic
+-- funnel when "Incl. simulated students" is on. Only simulated students.
+-- ---------------------------------------------------------------------
+do $$
+declare
+  g        record;
+  v_sq     uuid;
+  v_start  timestamptz;
+  v_mins   int;
+begin
+  for g in
+    select * from (values
+      ('comp1511-lab',  'mainlib-l3',   9, 14, array['mei','tomas','noah','ryan'],   'completed'),
+      ('badminton',     'ufac',         8, 17, array['kenji','ben','mateo'],         'completed'),
+      ('trivia-night',  'roundhouse',   7, 18, array['lucas','jack','arjun','ruby'], 'completed'),
+      ('boba',          'gongcha',      6, 15, array['aisha','sofia','chloe'],       'completed'),
+      ('leetcode',      'k17-lab',      5, 13, array['priya','zara','hassan'],       'completed'),
+      ('desn1000-build','makerspace',   4, 15, array['hana','oliver','isla'],        'completed'),
+      ('math1131-explain','lawlib-l2',  3, 10, array['linh','leo'],                  'completed'),
+      ('boba',          'esmes',        2, 16, array['aisha','sofia'],               'completed'),
+      ('anime-night',   'library-lawn', 1, 18, array['ethan','ava','chloe'],         'confirmed'),
+      ('econ1101-papers','mainlib-l4', -2, 10, array['grace','lucas','jack'],        'proposed')
+    ) t(act, venue, days_ago, hr, people, status)
+  loop
+    select duration_mins into v_mins from public.activities where id = g.act;
+    v_start := (((now() at time zone 'Australia/Sydney')::date - g.days_ago) + make_time(g.hr, 0, 0)) at time zone 'Australia/Sydney';
+
+    insert into public.squads (activity_id, venue_id, starts_at, ends_at, status, reasons, created_at)
+    values (g.act, g.venue, v_start, v_start + make_interval(mins => v_mins), g.status,
+            '{"Simulated history"}', v_start - interval '2 days')
+    returning id into v_sq;
+
+    insert into public.squad_members (squad_id, user_id, status, responded_at)
+    select v_sq, p.id,
+           case when g.status = 'proposed' and split_part(u.email, '@', 1) = 'jack' then 'invited' else 'accepted' end,
+           v_start - interval '1 day'
+    from public.profiles p join auth.users u on u.id = p.id
+    where split_part(u.email, '@', 1) = any(g.people) and u.email like '%@pool.demo';
+
+    if g.status = 'completed' then
+      insert into public.member_ratings (squad_id, rater_id, ratee_id, score, created_at)
+      select v_sq, a.user_id, b.user_id, 3 + abs(hashtext(a.user_id::text || b.user_id::text)) % 3, v_start + interval '4 hours'
+      from public.squad_members a join public.squad_members b on b.squad_id = a.squad_id and b.user_id <> a.user_id
+      where a.squad_id = v_sq
+        and abs(hashtext(a.user_id::text)) % 5 <> 0;  -- most people rate, not everyone
+
+      insert into public.venue_ratings (squad_id, rater_id, venue_id, score, created_at)
+      select v_sq, m.user_id, g.venue,
+             case when g.venue = 'lawlib-l2' then 2 else 3 + abs(hashtext(m.user_id::text || g.venue)) % 3 end,
+             v_start + interval '4 hours'
+      from public.squad_members m
+      where m.squad_id = v_sq and abs(hashtext(m.user_id::text)) % 5 <> 0;
+    end if;
+  end loop;
+
+  -- The second boba squad was a rebook of the first.
+  update public.squads s set rebook_of = (
+    select id from public.squads where activity_id = 'boba' and reasons = '{"Simulated history"}' order by starts_at limit 1)
+  where s.id = (select id from public.squads where activity_id = 'boba' and reasons = '{"Simulated history"}' order by starts_at desc limit 1);
+end $$;
+
+-- App opens, so weekly-active and cohort retention have something to show.
+insert into public.app_events (user_id, name, created_at)
+select p.id, 'app_open', d + make_interval(hours => 8 + (abs(hashtext(p.id::text || d::text)) % 12))
+from public.profiles p
+cross join lateral generate_series(date_trunc('day', p.created_at), now() - interval '1 day', interval '1 day') d
+where p.is_seed and abs(hashtext(p.id::text || d::text)) % 10 < 4;

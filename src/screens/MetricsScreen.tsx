@@ -10,7 +10,7 @@ interface MetricsScreenProps {
 }
 
 // Live funnel + retention computed from the production tables (see get_metrics in schema.sql).
-export const MetricsScreen: React.FC<MetricsScreenProps> = ({ onBack }) => {
+export const MetricsScreen: React.FC<MetricsScreenProps> = () => {
   const [includeSeed, setIncludeSeed] = useState(false);
   const [data, setData] = useState<Metrics | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -33,10 +33,10 @@ export const MetricsScreen: React.FC<MetricsScreenProps> = ({ onBack }) => {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
-        <TouchableOpacity onPress={onBack} style={styles.backBtn} accessibilityLabel="Back">
-          <Ionicons name="arrow-back" size={18} color={THEME.colors.deepTeal} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Live metrics</Text>
+        <View>
+          <Text style={styles.title}>Live from the database</Text>
+          <Text style={styles.subtitle}>Every number is a query, not a slide.</Text>
+        </View>
         <TouchableOpacity onPress={load} style={styles.backBtn} accessibilityLabel="Refresh">
           <Ionicons name="refresh" size={18} color={THEME.colors.deepTeal} />
         </TouchableOpacity>
@@ -147,9 +147,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
     color: THEME.colors.textPrimary,
+  },
+  subtitle: {
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+    marginTop: 2,
   },
   toggleRow: {
     flexDirection: 'row',

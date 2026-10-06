@@ -13,9 +13,10 @@
 | Layer | What | Where |
 |---|---|---|
 | App | Expo / React Native (runs on phones via Expo Go and in the browser) | `App.tsx`, `src/` |
-| Database + auth | Supabase Postgres, Tokyo region, project `pboexcylafpwwwzhppvf` | `supabase/schema.sql` |
-| Backend logic | Postgres functions (RPC) — matcher, scheduling, privacy, ratings, metrics | `supabase/schema.sql` |
-| Demo data | 11 venues, 26 activity cards, 3 demo logins, 30 simulated students | `supabase/seed.sql` |
+| Database + auth | Supabase Postgres, Tokyo region, project `pboexcylafpwwwzhppvf` | `supabase/schema.sql` (tables + privacy rules) |
+| Backend logic | Postgres functions (RPC) — matcher, scheduling, privacy, ratings, chat, metrics | `supabase/functions.sql` |
+| Demo data | 11 venues, 26 activity cards, 3 demo logins, 30 simulated students + 2 weeks of simulated history | `supabase/seed.sql` |
+| One-off DB changes | Applied to the live DB without wiping it | `supabase/migrations/` |
 | API client | Every backend call the app makes | `src/lib/api.ts` |
 
 There is no separate server: the "backend" is a set of SQL functions the app calls through Supabase. That keeps API keys off the phone and enforces privacy in the database.
@@ -29,8 +30,11 @@ There is no separate server: the "backend" is a set of SQL functions the app cal
 npm install
 npm run web          # app in the browser at http://localhost:8081
 npm start            # then scan the QR with Expo Go on your phone
-npm run db:setup     # (re)create all tables/functions + demo data — wipes demo data
+npm run db:functions # update backend logic only (keeps all data) ← use this for logic changes
 npm run db:seed      # reset demo data only
+npm run db:setup     # rebuild EVERYTHING + demo data — wipes all data, including real sign-ups
+npm run build:web    # static site in dist/ (deploy this)
+node scripts/smoke.mjs  # end-to-end backend test as Maya (resets her afterwards)
 npm run typecheck
 ```
 
@@ -41,7 +45,7 @@ npm run typecheck
 
 ## The loop (all real, all in the database)
 
-1. **Sign in** — demo accounts, or any `@unsw.edu.au` email. Other domains are rejected by a database trigger.
+1. **Sign in / Join** — demo accounts, or create an account with any `unsw.edu.au` email (other domains are rejected by a database trigger). New accounts go through a 5-step, icon-first onboarding: name + degree + year → hobbies (tap 3+) → courses → free-time grid → squad size + optional one-liner. Hobbies feed the deck ranking and the matcher ("You're all into boba & board games"). Profile → Edit re-opens it.
 2. **Discover** — `get_deck()` returns cards you haven't swiped, ranked by your courses, tags you've said yes to, real sessions first, then popularity. Real weekly sessions roll forward automatically so they never go stale.
 3. **"I'm in"** — `swipe()` saves it and immediately runs `form_squad()`:
    - candidates: people who said yes to the same card (+5), share tags from past yeses (+1 each, max 3), share courses (+2 each), take the card's course (+3), you rated 4★+ before (+6), different year (+0.5)
@@ -51,7 +55,7 @@ npm run typecheck
    - writes plain-English "why you matched" reasons from the real data
    - simulated students accept instantly; real users get an invite
 4. **Squad proposal** — members are anonymised (degree + year only, no name/face) until everyone accepts. `get_my_squads()` enforces this server-side.
-5. **Confirmed** — faces, names and status lines revealed; time, place, duration.
+5. **Confirmed** — faces, names and status lines revealed; time, place, duration. **Squad chat** unlocks (members only, emoji quick-replies, a simulated squad-mate says hi). Each member has a **flag** → report reason → they are never matched with you again.
 6. **After** — sessions auto-complete when they end (or "Demo: skip to after the session"). Rate each person ("go again?") and the venue.
 7. **Re-match** — `get_nudges()` shows "Go again with Mei?" on Discover. `rebook()` re-runs the matcher with only those people, a new time, and a different venue if you rated the last one low.
 8. **Metrics** (Profile → Metrics) — live funnel: signed up → onboarded → swiped → matched → confirmed → met up → rated → rebooked, with step conversion, weekly active, average ratings, and weekly sign-up cohorts with week-2 return (churn).
@@ -77,18 +81,21 @@ npm run typecheck
 ## Status
 
 ### Done
-- [x] Schema, RLS, seed data
+- [x] Schema, RLS, seed data (+ simulated 2-week history for the metrics screen)
 - [x] Matcher (scoring, time-finding, venue choice, reasons) as SQL
 - [x] Login, Discover, Squad list, Proposal, Confirmed, Rate, Profile, Metrics screens wired to the DB
 - [x] Rebook nudge from ratings
+- [x] Create account (UNSW email + password) and icon-first onboarding with hobbies
+- [x] Squad chat with quick replies; report/block
+- [x] Web build verified (`npm run build:web`)
 
 ### Next (in priority order)
-- [ ] Deploy web build so judges/classmates can open a URL (`npx expo export -p web` → drag `dist/` to Netlify Drop, or Vercel)
+- [ ] Deploy: `npm run build:web` → drag the `dist` folder onto https://app.netlify.com/drop → share the URL
+- [ ] Supabase → Authentication → URL Configuration → set **Site URL** to the deployed URL (so confirmation emails link back to the app)
+- [ ] Decide on email confirmation (Supabase → Authentication → Providers → Email → "Confirm email"): ON = real UNSW verification but default mailer only sends a few emails/hour; OFF = instant sign-up for the pilot
 - [ ] Test on 2 phones at once with two demo accounts (Alex + Sam both swipe the same card → real invite/accept flow)
-- [ ] Real UNSW email sign-in (Supabase email OTP; needs custom SMTP e.g. Resend for volume) + a short onboarding screen (courses, free times, one free-text line, 1-on-1 vs group)
 - [ ] Claude-written match reason (Supabase Edge Function; key stays server-side; keep current reasons as fallback)
-- [ ] Squad chat (table + Supabase Realtime, members only)
-- [ ] Report / block button on the Session screen (`reports` table already exists and the matcher already honours it)
+- [ ] Rotate the database password after the hackathon (it was shared in chat) and update `.env.local`
 
 ### Deliberately cut
 Push notifications, vouchers/partner perks, multi-university, profile browsing, DM inbox, compatibility % scores.

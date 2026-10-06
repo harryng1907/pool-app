@@ -31,7 +31,8 @@
     "db:setup": "node scripts/db.mjs setup",
     "db:seed": "node scripts/db.mjs seed",
     "typecheck": "tsc --noEmit",
-    "db:functions": "node scripts/db.mjs functions"
+    "db:functions": "node scripts/db.mjs functions",
+    "build:web": "expo export -p web"
   },
   "private": true
 }
