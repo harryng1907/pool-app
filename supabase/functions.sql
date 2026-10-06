@@ -11,10 +11,11 @@
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 declare
-  v_local text := split_part(new.email, '@', 1);
+  v_local text := coalesce(split_part(new.email, '@', 1), 'guest');
 begin
-  if new.email is null
-     or not (new.email ilike '%@unsw.edu.au' or new.email ilike '%.unsw.edu.au' or new.email ilike '%@pool.demo') then
+  -- Guests (anonymous demo sessions) are allowed; real accounts must be UNSW.
+  if not coalesce(new.is_anonymous, false) and (new.email is null
+     or not (new.email ilike '%@unsw.edu.au' or new.email ilike '%.unsw.edu.au' or new.email ilike '%@pool.demo')) then
     raise exception 'Pool is only open to UNSW students (use your UNSW email).';
   end if;
   insert into profiles (id, display_name, initials, avatar_color)
@@ -55,8 +56,11 @@ returns boolean language sql stable security definer set search_path = public as
       and av.start_hour <= extract(hour from t.l) + extract(minute from t.l) / 60.0
       and av.end_hour   >= extract(hour from t.l) + extract(minute from t.l) / 60.0 + p_mins / 60.0
   ) and not exists (
+    -- Already booked then? (Simulated demo students can be in many squads at once,
+    -- so several judges can run the same demo in parallel.)
     select 1 from squad_members m join squads s on s.id = m.squad_id
     where m.user_id = p_user and m.status <> 'declined' and s.status in ('proposed','confirmed')
+      and not (select is_seed from profiles where id = p_user)
       and tstzrange(s.starts_at, s.ends_at) && tstzrange(p_start, p_start + make_interval(mins => p_mins))
   );
 $$;
@@ -563,7 +567,8 @@ begin
       'year', p.year, 'vibe', p.vibe, 'status_quote', p.status_quote, 'group_pref', p.group_pref,
       'interests', to_jsonb(p.interests),
       'onboarded', p.onboarded_at is not null,
-      'email', (select email from auth.users where id = v_me),
+      'email', (select coalesce(email, '') from auth.users where id = v_me),
+      'is_guest', (select coalesce(is_anonymous, false) from auth.users where id = v_me),
       'courses', coalesce((select jsonb_agg(course order by course) from profile_courses where user_id = v_me), '[]'),
       'availability', coalesce((select jsonb_agg(jsonb_build_object('dow', dow, 'start', start_hour, 'end', end_hour) order by dow, start_hour)
                                 from availability where user_id = v_me), '[]'),
@@ -640,8 +645,8 @@ returns void language plpgsql security definer set search_path = public as $$
 declare
   v_me uuid := auth.uid();
 begin
-  if (select email from auth.users where id = v_me) not ilike '%@pool.demo' then
-    raise exception 'Only demo accounts can be reset';
+  if not exists (select 1 from auth.users where id = v_me and (email ilike '%@pool.demo' or is_anonymous)) then
+    raise exception 'Only demo and guest accounts can be reset';
   end if;
   delete from squads where id in (select squad_id from squad_members where user_id = v_me);
   delete from swipes where user_id = v_me;

@@ -99,6 +99,7 @@ export interface Me {
   interests: string[];
   onboarded: boolean;
   email: string;
+  is_guest: boolean;
   courses: string[];
   availability: { dow: number; start: number; end: number }[];
   stats: { swipes: number; squads_done: number; hours: number; people_met: number };

@@ -44,7 +44,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     );
   }
 
-  const isDemo = me.email.endsWith('@pool.demo');
+  const isDemo = me.is_guest || me.email.endsWith('@pool.demo');
 
   return (
     <ScrollView
@@ -70,7 +70,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <Text style={styles.degreeText}>
               {me.degree} ({yearLabel(me.year)} Year)
             </Text>
-            <Text style={styles.zidText}>{me.email}</Text>
+            <Text style={styles.zidText}>{me.is_guest ? 'Guest · demo account' : me.email}</Text>
           </View>
         </View>
 

@@ -46,6 +46,16 @@ export async function signIn(email: string, password: string) {
   if (error) throw new Error(error.message === 'Email not confirmed' ? 'Check your UNSW inbox and confirm your email first.' : error.message);
 }
 
+/** A private throwaway account (Supabase anonymous sign-in) — each judge/visitor gets their own. */
+export async function signInGuest() {
+  const { error } = await supabase.auth.signInAnonymously();
+  if (error) {
+    throw new Error(
+      /anonymous/i.test(error.message) ? 'Guest mode is switched off right now. Try a demo student below.' : error.message,
+    );
+  }
+}
+
 export async function signOut() {
   await supabase.auth.signOut();
 }

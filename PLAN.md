@@ -91,6 +91,7 @@ npm run typecheck
 
 ### Next (in priority order)
 - [ ] Deploy: `npm run build:web` → drag the `dist` folder onto https://app.netlify.com/drop → share the URL
+- [ ] Supabase → Authentication → Sign In / Providers → turn on **Allow anonymous sign-ins** (enables "Try it as a guest": every judge gets their own fresh account + onboarding, so nobody fights over Maya)
 - [ ] Supabase → Authentication → URL Configuration → set **Site URL** to the deployed URL (so confirmation emails link back to the app)
 - [ ] Decide on email confirmation (Supabase → Authentication → Providers → Email → "Confirm email"): ON = real UNSW verification but default mailer only sends a few emails/hour; OFF = instant sign-up for the pilot
 - [ ] Test on 2 phones at once with two demo accounts (Alex + Sam both swipe the same card → real invite/accept flow)

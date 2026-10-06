@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { THEME } from '../theme';
-import { DEMO_ACCOUNTS, isUnswEmail, signIn, signInDemo, signUp } from '../lib/api';
+import { DEMO_ACCOUNTS, isUnswEmail, signIn, signInDemo, signInGuest, signUp } from '../lib/api';
 
 type Mode = 'join' | 'login';
 
@@ -42,6 +42,17 @@ export const LoginScreen: React.FC = () => {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
     } finally {
+      setPending(null);
+    }
+  };
+
+  const guest = async () => {
+    setPending('guest');
+    setError(null);
+    try {
+      await signInGuest();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not start guest mode');
       setPending(null);
     }
   };
@@ -195,9 +206,30 @@ export const LoginScreen: React.FC = () => {
 
       <View style={styles.orRow}>
         <View style={styles.orLine} />
-        <Text style={styles.orText}>or try a demo student</Text>
+        <Text style={styles.orText}>or just look around</Text>
         <View style={styles.orLine} />
       </View>
+
+      <TouchableOpacity
+        style={styles.guestRow}
+        onPress={guest}
+        disabled={pending !== null}
+        activeOpacity={0.85}
+        accessibilityLabel="Try Pool as a guest"
+      >
+        <View style={styles.guestIcon}>
+          <Ionicons name="sparkles" size={20} color="#FFFFFF" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.guestTitle}>Try it as a guest</Text>
+          <Text style={styles.guestSub}>Your own fresh account · 1 minute setup</Text>
+        </View>
+        {pending === 'guest' ? (
+          <ActivityIndicator color="#FFFFFF" />
+        ) : (
+          <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+        )}
+      </TouchableOpacity>
 
       {DEMO_ACCOUNTS.map((account) => (
         <TouchableOpacity
@@ -385,6 +417,33 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: THEME.colors.textMuted,
+  },
+  guestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: THEME.colors.deepTeal,
+    borderRadius: 20,
+    padding: 12,
+    marginBottom: 8,
+  },
+  guestIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#FFFFFF26',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  guestTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  guestSub: {
+    fontSize: 12,
+    color: '#FFFFFFCC',
+    marginTop: 2,
   },
   accountRow: {
     flexDirection: 'row',
