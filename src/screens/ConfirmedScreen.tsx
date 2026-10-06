@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { THEME } from '../theme';
@@ -20,6 +21,20 @@ interface ConfirmedScreenProps {
   onOpenChat: () => void;
   onReport: (userId: string, reason: string) => Promise<void>;
 }
+
+// Pre-filled Google Calendar event (works on phones and laptops, no permissions needed).
+const calendarUrl = (squad: Squad) => {
+  const stamp = (iso: string) => new Date(iso).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const names = squad.members.filter((m) => !m.is_me && !m.hidden).map((m) => m.name).join(', ');
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: `Pool: ${squad.activity.title}`,
+    dates: `${stamp(squad.starts_at)}/${stamp(squad.ends_at)}`,
+    location: `${squad.venue.name}, UNSW Kensington`,
+    details: [`Your Pool squad${names ? ` with ${names}` : ''}.`, ...squad.reasons].join('\n'),
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+};
 
 const REPORT_REASONS: { label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { label: "Didn't show up", icon: 'time-outline' },
@@ -210,7 +225,10 @@ export const ConfirmedScreen: React.FC<ConfirmedScreenProps> = ({
           <>
             <TouchableOpacity
               style={[styles.calendarButton, calendarAdded && styles.calendarButtonAdded]}
-              onPress={() => setCalendarAdded(true)}
+              onPress={() => {
+                setCalendarAdded(true);
+                Linking.openURL(calendarUrl(squad));
+              }}
               activeOpacity={0.85}
               accessibilityLabel="Add session to calendar"
             >
