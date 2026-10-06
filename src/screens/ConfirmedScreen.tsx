@@ -17,7 +17,15 @@ interface ConfirmedScreenProps {
   onEndSession: () => void;
   onRate: () => void;
   onBack: () => void;
+  onOpenChat: () => void;
+  onReport: (userId: string, reason: string) => Promise<void>;
 }
+
+const REPORT_REASONS: { label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { label: "Didn't show up", icon: 'time-outline' },
+  { label: 'Made me uncomfortable', icon: 'sad-outline' },
+  { label: 'Inappropriate messages', icon: 'chatbox-ellipses-outline' },
+];
 
 // A confirmed (or finished) session: faces revealed, time, place, and what happens next.
 export const ConfirmedScreen: React.FC<ConfirmedScreenProps> = ({
@@ -26,8 +34,12 @@ export const ConfirmedScreen: React.FC<ConfirmedScreenProps> = ({
   onEndSession,
   onRate,
   onBack,
+  onOpenChat,
+  onReport,
 }) => {
   const [calendarAdded, setCalendarAdded] = useState(false);
+  const [reporting, setReporting] = useState<string | null>(null);
+  const [reported, setReported] = useState<Set<string>>(new Set());
   const done = squad.status === 'completed';
   const accepted = squad.members.filter((m) => m.status === 'accepted');
 
@@ -144,7 +156,38 @@ export const ConfirmedScreen: React.FC<ConfirmedScreenProps> = ({
                   </View>
                 </View>
                 {member.status_quote && <Text style={styles.memberQuote}>{member.status_quote}</Text>}
+                {reporting === member.id && (
+                  <View style={styles.reportBox}>
+                    {REPORT_REASONS.map((r) => (
+                      <TouchableOpacity
+                        key={r.label}
+                        style={styles.reportChip}
+                        onPress={async () => {
+                          await onReport(member.id!, r.label);
+                          setReported((x) => new Set(x).add(member.id!));
+                          setReporting(null);
+                        }}
+                      >
+                        <Ionicons name={r.icon} size={14} color="#B91C1C" />
+                        <Text style={styles.reportChipText}>{r.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+                {member.id && reported.has(member.id) && (
+                  <Text style={styles.reportedText}>Reported · you won't be matched again</Text>
+                )}
               </View>
+
+              {!member.is_me && member.id && !reported.has(member.id) && (
+                <TouchableOpacity
+                  style={styles.flagBtn}
+                  onPress={() => setReporting(reporting === member.id ? null : member.id)}
+                  accessibilityLabel={`Report ${member.name}`}
+                >
+                  <Ionicons name={reporting === member.id ? 'close' : 'flag-outline'} size={16} color={THEME.colors.textMuted} />
+                </TouchableOpacity>
+              )}
             </View>
           ))}
         </View>
@@ -158,6 +201,11 @@ export const ConfirmedScreen: React.FC<ConfirmedScreenProps> = ({
       </View>
 
       <View style={styles.bottomActionContainer}>
+        <TouchableOpacity style={styles.chatButton} onPress={onOpenChat} activeOpacity={0.85}>
+          <Ionicons name="chatbubbles" size={20} color="#FFFFFF" />
+          <Text style={styles.calendarButtonText}>Squad chat</Text>
+        </TouchableOpacity>
+
         {!done && (
           <>
             <TouchableOpacity
@@ -496,5 +544,50 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: THEME.colors.deepTeal,
+  },
+  chatButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 56,
+    borderRadius: THEME.radii.pill,
+    backgroundColor: THEME.colors.deepTeal,
+    marginBottom: 12,
+    ...THEME.shadows.buttonTeal,
+  },
+  flagBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'flex-start',
+  },
+  reportBox: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+  },
+  reportChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: THEME.radii.pill,
+    backgroundColor: '#FEF2F2',
+  },
+  reportChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#B91C1C',
+  },
+  reportedText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#B91C1C',
+    marginTop: 6,
   },
 });

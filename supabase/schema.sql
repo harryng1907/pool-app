@@ -8,7 +8,7 @@
 create extension if not exists pgcrypto with schema extensions;
 
 drop table if exists
-  public.app_events, public.reports, public.venue_ratings, public.member_ratings,
+  public.messages, public.app_events, public.reports, public.venue_ratings, public.member_ratings,
   public.squad_members, public.squads, public.swipes, public.activities,
   public.availability, public.profile_courses, public.profiles, public.venues
   cascade;
@@ -147,6 +147,17 @@ create table public.app_events (
   props       jsonb,
   created_at  timestamptz not null default now()
 );
+
+-- Squad chat. Only members of a confirmed (or finished) squad can read or post.
+create table public.messages (
+  id          bigserial primary key,
+  squad_id    uuid not null references public.squads(id) on delete cascade,
+  user_id     uuid not null references public.profiles(id) on delete cascade,
+  body        text not null check (length(trim(body)) between 1 and 500),
+  created_at  timestamptz not null default now()
+);
+create index on public.messages (squad_id, created_at);
+alter table public.messages enable row level security;
 
 create index on public.swipes (activity_id, decision);
 create index on public.squad_members (user_id);

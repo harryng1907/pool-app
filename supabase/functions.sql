@@ -290,7 +290,11 @@ begin
   else
     select course, count(*) as n into r from profile_courses
     where user_id = any(v_everyone) group by course having count(*) >= 2 order by count(*) desc limit 1;
-    if found then v_reasons := v_reasons || format('%s of you take %s', r.n, r.course); end if;
+    if found then
+      v_reasons := v_reasons || case when r.n = 2 and array_length(v_everyone, 1) = 2
+                                     then format('You both take %s', r.course)
+                                     else format('%s of you take %s', r.n, r.course) end;
+    end if;
   end if;
 
   v_reasons := v_reasons || format('Everyone is free %s',
@@ -451,6 +455,7 @@ begin
     update squads set status = 'cancelled' where id = p_squad and status = 'proposed';
   elsif v_pending = 0 then
     update squads set status = 'confirmed' where id = p_squad and status = 'proposed';
+    if found then perform pool_seed_says(p_squad, 'intro'); end if;
   end if;
 
   select status into v_status from squads where id = p_squad;
@@ -643,6 +648,7 @@ begin
   delete from member_ratings where rater_id = v_me;
   delete from venue_ratings where rater_id = v_me;
   delete from app_events where user_id = v_me;
+  delete from reports where reporter_id = v_me;
 end $$;
 
 -- Onboarding / edit profile. Every key is optional; only keys present are changed.
@@ -687,4 +693,83 @@ begin
   end if;
 
   return get_me();
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Squad chat (no table policies: all access goes through these functions)
+-- ---------------------------------------------------------------------
+
+create or replace function public.can_chat(p_squad uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from squads s join squad_members m on m.squad_id = s.id
+    where s.id = p_squad and s.status in ('confirmed','completed')
+      and m.user_id = auth.uid() and m.status = 'accepted'
+  );
+$$;
+
+-- Simulated students say something friendly, so the demo chat isn't empty.
+create or replace function public.pool_seed_says(p_squad uuid, p_kind text)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_user uuid;
+  v_quote text;
+  v_cat text;
+begin
+  select p.id, p.status_quote into v_user, v_quote
+  from squad_members m join profiles p on p.id = m.user_id
+  where m.squad_id = p_squad and m.status = 'accepted' and p.is_seed
+  order by m.responded_at, p.id limit 1;
+  if v_user is null then return; end if;
+
+  select a.category into v_cat from squads s join activities a on a.id = s.activity_id where s.id = p_squad;
+
+  insert into messages (squad_id, user_id, body) values (p_squad, v_user,
+    case p_kind
+      when 'intro' then 'Hey all 👋 ' || coalesce(v_quote, 'See you there!')
+      else case v_cat
+        when 'quiet'  then 'Sounds good! I''ll grab us a table 📚'
+        when 'food'   then 'Yesss, so in 🧋'
+        when 'active' then 'Let''s go 💪 I can bring a spare'
+        when 'maker'  then 'Bringing my toolkit 🔧'
+        else 'Can''t wait 🙌'
+      end
+    end);
+end $$;
+revoke all on function public.pool_seed_says(uuid, text) from public, anon, authenticated;
+
+create or replace function public.get_messages(p_squad uuid, p_after bigint default 0)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  if not can_chat(p_squad) then raise exception 'Chat opens once your squad is confirmed'; end if;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'id', m.id, 'body', m.body, 'created_at', m.created_at, 'is_me', m.user_id = auth.uid(),
+      'name', p.display_name, 'initials', p.initials, 'avatar_color', p.avatar_color) order by m.id)
+    from messages m join profiles p on p.id = m.user_id
+    where m.squad_id = p_squad and m.id > p_after
+  ), '[]'::jsonb);
+end $$;
+
+create or replace function public.send_message(p_squad uuid, p_body text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not can_chat(p_squad) then raise exception 'Chat opens once your squad is confirmed'; end if;
+  insert into messages (squad_id, user_id, body) values (p_squad, auth.uid(), trim(p_body));
+  -- First message from a real person → a simulated squad-mate replies once.
+  if (select count(*) from messages m join profiles p on p.id = m.user_id
+      where m.squad_id = p_squad and p.is_seed) <= 1 then
+    perform pool_seed_says(p_squad, 'reply');
+  end if;
+end $$;
+
+-- Report someone from a squad you were both in. The matcher never pairs you again.
+create or replace function public.report_member(p_squad uuid, p_user uuid, p_reason text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not is_squad_member(p_squad)
+     or not exists (select 1 from squad_members where squad_id = p_squad and user_id = p_user) then
+    raise exception 'You can only report people from your own squads';
+  end if;
+  insert into reports (reporter_id, reported_id, squad_id, reason) values (auth.uid(), p_user, p_squad, p_reason);
 end $$;

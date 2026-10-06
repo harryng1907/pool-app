@@ -19,6 +19,7 @@ import { ProfileScreen } from './src/screens/ProfileScreen';
 import { MetricsScreen } from './src/screens/MetricsScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
+import { ChatScreen } from './src/screens/ChatScreen';
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong');
 
@@ -225,11 +226,15 @@ function MainApp({ session }: { session: Session }) {
     : screen === 'profile' ? 'Profile'
     : screen === 'metrics' ? 'Metrics'
     : screen === 'rate' ? 'Rate'
+    : screen === 'chat' ? 'Squad chat'
     : screen === 'squad' && openSquadData?.status !== 'proposed' ? 'Session'
     : 'Squads';
 
-  const showBack = screen === 'squad' || screen === 'rate' || screen === 'metrics';
-  const back = () => (screen === 'metrics' ? go('profile', 'profile') : go('squads', 'squads'));
+  const showBack = screen === 'squad' || screen === 'rate' || screen === 'metrics' || screen === 'chat';
+  const back = () =>
+    screen === 'metrics' ? go('profile', 'profile')
+    : screen === 'chat' ? go('squads', 'squad', openSquadId)
+    : go('squads', 'squads');
 
   let body: React.ReactNode = null;
   if (screen === 'discover') {
@@ -272,8 +277,12 @@ function MainApp({ session }: { session: Session }) {
           onEndSession={() => handleEndSession(openSquadData)}
           onRate={() => go('squads', 'rate', openSquadData.id)}
           onBack={back}
+          onOpenChat={() => go('squads', 'chat', openSquadData.id)}
+          onReport={(userId, reason) => withBusy(() => api.reportMember(openSquadData.id, userId, reason))}
         />
       );
+  } else if (screen === 'chat' && openSquadData) {
+    body = <ChatScreen squad={openSquadData} />;
   } else if (screen === 'rate' && openSquadData) {
     body = (
       <RateScreen

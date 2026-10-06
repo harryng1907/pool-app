@@ -1,6 +1,6 @@
 export type TabType = 'discover' | 'squads' | 'profile';
 
-export type ScreenType = 'discover' | 'squads' | 'squad' | 'rate' | 'profile' | 'metrics';
+export type ScreenType = 'discover' | 'squads' | 'squad' | 'rate' | 'chat' | 'profile' | 'metrics';
 
 export type SquadType = 'deadline' | 'hobby' | 'career';
 export type Category = 'quiet' | 'social' | 'active' | 'maker' | 'food';
@@ -128,4 +128,15 @@ export interface ProfileInput {
   interests?: string[];
   courses?: string[];
   availability?: { dow: number; start: number; end: number }[];
+}
+
+// From get_messages
+export interface Message {
+  id: number;
+  body: string;
+  created_at: string;
+  is_me: boolean;
+  name: string;
+  initials: string;
+  avatar_color: string;
 }
