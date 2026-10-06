@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#0E5B66"/>
+    </marker>
+    <marker id="arrowO" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#F57C2A"/>
+    </marker>
+    <style>
+      .step { fill: #FFFFFF; stroke: #EAEAEA; stroke-width: 2; }
+      .num { fill: #F57C2A; }
+      .numt { fill: #FFFFFF; font-size: 20px; font-weight: 800; text-anchor: middle; }
+      .title { fill: #0E1726; font-size: 24px; font-weight: 800; text-anchor: middle; }
+      .sub { fill: #5A6578; font-size: 16px; text-anchor: middle; }
+      .flow { stroke: #0E5B66; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .loop { stroke: #F57C2A; stroke-width: 3; fill: none; stroke-dasharray: 9 7; marker-end: url(#arrowO); }
+      .lane { fill: #E8F4F6; }
+      .lanet { fill: #0E5B66; font-size: 15px; font-weight: 800; letter-spacing: 1.5px; }
+      .db { fill: #0E1726; }
+      .dbt { fill: #FFFFFF; font-size: 17px; font-weight: 700; text-anchor: middle; }
+      .dbs { fill: #B8C2CC; font-size: 14px; text-anchor: middle; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="900" fill="#F9F9F6"/>
+  <text x="60" y="70" fill="#0E1726" font-size="38" font-weight="800">Pool — end-to-end workflow</text>
+  <text x="60" y="104" fill="#5A6578" font-size="19">From a shy first-year opening the app to a squad that wants to meet again. Every step below is live in the app.</text>
+
+  <!-- Lane labels -->
+  <rect x="60" y="140" width="1480" height="34" rx="8" class="lane"/>
+  <text x="76" y="163" class="lanet">STUDENT</text>
+  <text x="560" y="163" class="lanet">POOL AI (MATCHER IN THE DATABASE)</text>
+  <text x="1130" y="163" class="lanet">THE SESSION</text>
+
+  <!-- Row 1 -->
+  <g>
+    <rect x="60" y="200" width="250" height="170" rx="22" class="step"/>
+    <circle cx="98" cy="236" r="20" class="num"/><text x="98" y="243" class="numt">1</text>
+    <text x="185" y="290" class="title">Join</text>
+    <text x="185" y="320" class="sub">UNSW email only</text>
+    <text x="185" y="344" class="sub">(rejected by the DB otherwise)</text>
+  </g>
+  <g>
+    <rect x="360" y="200" width="250" height="170" rx="22" class="step"/>
+    <circle cx="398" cy="236" r="20" class="num"/><text x="398" y="243" class="numt">2</text>
+    <text x="485" y="290" class="title">Onboard</text>
+    <text x="485" y="320" class="sub">Tap hobbies, courses,</text>
+    <text x="485" y="344" class="sub">free times, 1-on-1 or group</text>
+  </g>
+  <g>
+    <rect x="660" y="200" width="250" height="170" rx="22" class="step"/>
+    <circle cx="698" cy="236" r="20" class="num"/><text x="698" y="243" class="numt">3</text>
+    <text x="785" y="290" class="title">Swipe activities</text>
+    <text x="785" y="320" class="sub">“I’m in” / “Not for me”</text>
+    <text x="785" y="344" class="sub">Study · Hobby · Career</text>
+  </g>
+  <g>
+    <rect x="960" y="200" width="280" height="170" rx="22" class="step" stroke="#F57C2A"/>
+    <circle cx="998" cy="236" r="20" class="num"/><text x="998" y="243" class="numt">4</text>
+    <text x="1100" y="282" class="title">AI forms a squad</text>
+    <text x="1100" y="310" class="sub">Scores courses, hobbies, swipes,</text>
+    <text x="1100" y="332" class="sub">past ratings · finds a time all are</text>
+    <text x="1100" y="354" class="sub">free · picks a public venue</text>
+  </g>
+  <g>
+    <rect x="1290" y="200" width="250" height="170" rx="22" class="step"/>
+    <circle cx="1328" cy="236" r="20" class="num"/><text x="1328" y="243" class="numt">5</text>
+    <text x="1415" y="290" class="title">Squad proposal</text>
+    <text x="1415" y="320" class="sub">Why you matched</text>
+    <text x="1415" y="344" class="sub">Names &amp; faces hidden</text>
+  </g>
+
+  <path d="M310 285 H352" class="flow"/>
+  <path d="M610 285 H652" class="flow"/>
+  <path d="M910 285 H952" class="flow"/>
+  <path d="M1240 285 H1282" class="flow"/>
+  <path d="M1415 370 V430" class="flow"/>
+
+  <!-- Row 2 (right to left) -->
+  <g>
+    <rect x="1290" y="440" width="250" height="170" rx="22" class="step"/>
+    <circle cx="1328" cy="476" r="20" class="num"/><text x="1328" y="483" class="numt">6</text>
+    <text x="1415" y="530" class="title">Everyone says yes</text>
+    <text x="1415" y="560" class="sub">Faces revealed</text>
+    <text x="1415" y="584" class="sub">Squad-only chat unlocks</text>
+  </g>
+  <g>
+    <rect x="960" y="440" width="280" height="170" rx="22" class="step"/>
+    <circle cx="998" cy="476" r="20" class="num"/><text x="998" y="483" class="numt">7</text>
+    <text x="1100" y="530" class="title">Meet up</text>
+    <text x="1100" y="560" class="sub">Real time, public campus spot</text>
+    <text x="1100" y="584" class="sub">Add to calendar · report/block</text>
+  </g>
+  <g>
+    <rect x="660" y="440" width="250" height="170" rx="22" class="step"/>
+    <circle cx="698" cy="476" r="20" class="num"/><text x="698" y="483" class="numt">8</text>
+    <text x="785" y="530" class="title">Rate</text>
+    <text x="785" y="560" class="sub">“Go again?” per person</text>
+    <text x="785" y="584" class="sub">+ the venue (private)</text>
+  </g>
+  <g>
+    <rect x="360" y="440" width="250" height="170" rx="22" class="step" stroke="#F57C2A"/>
+    <circle cx="398" cy="476" r="20" class="num"/><text x="398" y="483" class="numt">9</text>
+    <text x="485" y="530" class="title">“Go again with Mei?”</text>
+    <text x="485" y="560" class="sub">Rebook: same people,</text>
+    <text x="485" y="584" class="sub">new time, better venue</text>
+  </g>
+
+  <path d="M1290 525 H1248" class="flow"/>
+  <path d="M960 525 H918" class="flow"/>
+  <path d="M660 525 H618" class="flow"/>
+
+  <!-- Learning loop back into the matcher -->
+  <path d="M485 440 C 485 400, 1100 410, 1100 378" class="loop"/>
+  <text x="700" y="418" fill="#F57C2A" font-size="16" font-weight="800">ratings feed the next match (4★+ → together again, ≤2★ → never again / avoid venue)</text>
+
+  <!-- Data layer -->
+  <rect x="60" y="660" width="1480" height="190" rx="22" class="db"/>
+  <text x="96" y="700" fill="#F57C2A" font-size="15" font-weight="800" letter-spacing="1.5">UNDER THE HOOD</text>
+  <g>
+    <text x="270" y="752" class="dbt">Supabase Postgres</text>
+    <text x="270" y="778" class="dbs">profiles · activities · swipes · squads</text>
+    <text x="270" y="800" class="dbs">ratings · chat · reports · events</text>
+  </g>
+  <g>
+    <text x="640" y="752" class="dbt">Privacy by design</text>
+    <text x="640" y="778" class="dbs">Row-level security on every table</text>
+    <text x="640" y="800" class="dbs">No endpoint lists other students</text>
+  </g>
+  <g>
+    <text x="1000" y="752" class="dbt">Matcher = SQL functions</text>
+    <text x="1000" y="778" class="dbs">Runs server-side, explains every match</text>
+    <text x="1000" y="800" class="dbs">Works from user #1 (cold start)</text>
+  </g>
+  <g>
+    <text x="1350" y="752" class="dbt">Live metrics</text>
+    <text x="1350" y="778" class="dbs">Signup → swipe → match → meet</text>
+    <text x="1350" y="800" class="dbs">→ rate → rebook · cohort churn</text>
+  </g>
+</svg>

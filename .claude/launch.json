@@ -24,6 +24,18 @@
         "C:/Users/harry/pool-app/dist"
       ],
       "port": 8090
+    },
+    {
+      "name": "pool-docs",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8091",
+        "--directory",
+        "C:/Users/harry/pool-app/docs"
+      ],
+      "port": 8091
     }
   ]
 }
