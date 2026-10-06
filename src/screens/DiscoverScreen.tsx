@@ -195,7 +195,7 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
                       style={{ marginRight: 4 }}
                     />
                     <Text style={[styles.tagText, styles.spotTagText]}>
-                      {card.spots_left} of {card.capacity} spots
+                      {card.spots_left} {card.spots_left === 1 ? 'spot' : 'spots'} open
                     </Text>
                   </View>
                 )}

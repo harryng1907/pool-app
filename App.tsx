@@ -51,6 +51,11 @@ function MainApp({ session }: { session: Session }) {
     setLoading(true);
     try {
       const [m, d] = await Promise.all([api.getMe(), api.getDeck(), loadSquads()]);
+      if (!m) {
+        // Saved login points at an account that no longer exists (e.g. demo data was re-seeded).
+        await api.signOut();
+        return;
+      }
       setMe(m);
       setCards(d);
     } catch (e) {

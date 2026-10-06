@@ -263,7 +263,7 @@ begin
    where kind = 'session' and starts_at < now();
 
   return coalesce((
-    select jsonb_agg(card order by rank desc)
+    select jsonb_agg(card order by rank desc, a.starts_at nulls last, a.id)
     from (
       select a.*, v.name as venue_name, v.detail as venue_detail, ic.n as interested,
              -- rank: my courses first, then things like what I've said yes to, then real sessions, then popularity
@@ -272,7 +272,8 @@ begin
                where s.user_id = v_me and s.decision = 'in' and t = any(a.tags))
            + (case when a.kind = 'session' then 1.5 else 0 end)
            + ln(1 + ic.n) * 0.5
-           + random() * 0.5 as rank
+           -- happening in the next couple of days → a little higher
+           + (case when a.starts_at < now() + interval '2 days' then 0.5 else 0 end) as rank
       from activities a
       left join venues v on v.id = a.venue_id
       cross join lateral (
@@ -280,7 +281,7 @@ begin
         where s.activity_id = a.id and s.decision = 'in' and s.user_id <> v_me
       ) ic
       where not exists (select 1 from swipes s where s.activity_id = a.id and s.user_id = v_me)
-      order by rank desc
+      order by rank desc, a.starts_at nulls last, a.id
       limit p_limit
     ) a
     cross join lateral (
@@ -334,6 +335,7 @@ declare
   v_avoided     text;
   v_squad       uuid;
   v_reasons     text[] := '{}';
+  v_from        timestamptz := now() + interval '2 hours';
   r             record;
 begin
   if v_me is null then raise exception 'not signed in'; end if;
@@ -392,17 +394,22 @@ begin
     delete from _cand where id not in (select id from _cand order by score desc limit 8);
   end if;
 
-  -- 2. Pick a time.
+  -- 2. Pick a time. A rebook looks from the day after the last session onwards.
+  if p_rebook_of is not null then
+    select greatest(v_from, ((starts_at at time zone 'Australia/Sydney')::date + 1)::timestamp at time zone 'Australia/Sydney')
+      into v_from from squads where id = p_rebook_of;
+  end if;
+
   if v_fixed_time then
     v_best_slot := a.starts_at;
   else
     select count(*) into v_pool_size from _cand;
     for v_slot in
       select (d::date + make_time(h, 0, 0)) at time zone 'Australia/Sydney'
-      from generate_series((now() at time zone 'Australia/Sydney')::date,
-                           (now() at time zone 'Australia/Sydney')::date + 7, interval '1 day') d,
+      from generate_series((v_from at time zone 'Australia/Sydney')::date,
+                           (v_from at time zone 'Australia/Sydney')::date + 7, interval '1 day') d,
            generate_series(8, 20) h
-      where ((d::date + make_time(h, 0, 0)) at time zone 'Australia/Sydney') > now() + interval '2 hours'
+      where ((d::date + make_time(h, 0, 0)) at time zone 'Australia/Sydney') >= v_from
       order by 1
     loop
       continue when not pool_is_free(v_me, v_slot, a.duration_mins);
@@ -453,7 +460,9 @@ begin
   -- 4. Explain the match in plain words.
   if a.course is not null then
     select count(*) into v_count from profile_courses where course = a.course and user_id = any(v_everyone);
-    if v_count = array_length(v_everyone, 1) then
+    if v_count = 2 and array_length(v_everyone, 1) = 2 then
+      v_reasons := v_reasons || format('You both take %s', a.course);
+    elsif v_count = array_length(v_everyone, 1) then
       v_reasons := v_reasons || format('All %s of you take %s', v_count, a.course);
     elsif v_count >= 2 then
       v_reasons := v_reasons || format('%s of you take %s', v_count, a.course);
@@ -470,7 +479,7 @@ begin
   select count(*) into v_count from swipes
   where activity_id = a.id and decision = 'in' and user_id = any(v_chosen);
   if v_count = array_length(v_chosen, 1) then
-    v_reasons := v_reasons || 'Everyone said "I''m in" to this too'::text;
+    v_reasons := v_reasons || case when v_count = 1 then 'They said "I''m in" to this too' else 'Everyone said "I''m in" to this too' end;
   elsif v_count > 0 then
     v_reasons := v_reasons || format('%s of them said "I''m in" to this too', v_count);
   else
@@ -561,7 +570,12 @@ begin
                'members', (
                  select jsonb_agg(
                    -- Privacy: names, faces and quotes only after everyone has accepted.
-                   case when s.status in ('confirmed','completed') or m.user_id = v_me then
+                   case when s.status in ('confirmed','completed') or m.user_id = v_me
+                          -- …or you've already met them in a past session
+                          or exists (select 1 from squads ps
+                                     join squad_members a1 on a1.squad_id = ps.id and a1.user_id = v_me and a1.status = 'accepted'
+                                     join squad_members a2 on a2.squad_id = ps.id and a2.user_id = m.user_id and a2.status = 'accepted'
+                                     where ps.status = 'completed') then
                      jsonb_build_object(
                        'id', p.id, 'name', p.display_name, 'initials', p.initials,
                        'avatar_color', p.avatar_color, 'degree', p.degree, 'degree_short', p.degree_short,

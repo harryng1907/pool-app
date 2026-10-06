@@ -100,7 +100,7 @@ export const SquadsScreen: React.FC<SquadsScreenProps> = ({
           ))}
         </View>
 
-        {!squad.revealed && (
+        {squad.members.some((m) => m.hidden) && (
           <View style={styles.privacyNote}>
             <Ionicons name="lock-closed" size={13} color={THEME.colors.textMuted} />
             <Text style={styles.privacyText}>Names and faces appear once everyone says yes</Text>

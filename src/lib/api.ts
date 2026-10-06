@@ -29,7 +29,7 @@ export async function signOut() {
 
 // --- Profile ----------------------------------------------------------
 
-export const getMe = () => rpc<Me>('get_me');
+export const getMe = () => rpc<Me | null>('get_me');
 
 // --- Deck -------------------------------------------------------------
 
