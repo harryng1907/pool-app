@@ -11,6 +11,8 @@ interface HeaderProps {
   onBackPress?: () => void;
   onResetPress?: () => void;
   showBack?: boolean;
+  initials?: string;
+  avatarColor?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -20,6 +22,8 @@ export const Header: React.FC<HeaderProps> = ({
   onBackPress,
   onResetPress,
   showBack = false,
+  initials = '',
+  avatarColor,
 }) => {
   return (
     <View style={styles.container}>
@@ -70,8 +74,8 @@ export const Header: React.FC<HeaderProps> = ({
           activeOpacity={0.7}
           accessibilityLabel="Open Profile"
         >
-          <View style={styles.avatarCircle}>
-            <Text style={styles.avatarInitials}>MY</Text>
+          <View style={[styles.avatarCircle, avatarColor ? { backgroundColor: avatarColor } : null]}>
+            <Text style={styles.avatarInitials}>{initials}</Text>
           </View>
           <View style={styles.onlineBadge} />
         </TouchableOpacity>

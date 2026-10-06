@@ -5,34 +5,31 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { THEME } from '../theme';
-import { SquadMember } from '../types';
-import { SESSION_DETAILS } from '../data/mockData';
+import { Squad } from '../types';
+import { formatDate, formatDuration, formatRange, formatWhen, SQUAD_TYPE_LABEL, yearLabel } from '../lib/format';
 
 interface ConfirmedScreenProps {
-  members: SquadMember[];
-  onResetDemo: () => void;
-  onBackToSquads: () => void;
+  squad: Squad;
+  busy: boolean;
+  onEndSession: () => void;
+  onRate: () => void;
+  onBack: () => void;
 }
 
+// A confirmed (or finished) session: faces revealed, time, place, and what happens next.
 export const ConfirmedScreen: React.FC<ConfirmedScreenProps> = ({
-  members,
-  onResetDemo,
-  onBackToSquads,
+  squad,
+  busy,
+  onEndSession,
+  onRate,
+  onBack,
 }) => {
   const [calendarAdded, setCalendarAdded] = useState(false);
-
-  const handleAddToCalendar = () => {
-    setCalendarAdded(true);
-    Alert.alert(
-      'Session added to calendar!',
-      'Tuesday 2:00 PM – 5:00 PM @ Law Library L2 with Mei & Tomas.',
-      [{ text: 'Great!', style: 'default' }]
-    );
-  };
+  const done = squad.status === 'completed';
+  const accepted = squad.members.filter((m) => m.status === 'accepted');
 
   return (
     <ScrollView
@@ -40,158 +37,159 @@ export const ConfirmedScreen: React.FC<ConfirmedScreenProps> = ({
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
     >
-      {/* Top Pill Tag: ● SESSION CONFIRMED */}
       <View style={styles.topStatusRow}>
         <View style={styles.confirmedPill}>
-          <View style={styles.greenDot} />
-          <Text style={styles.confirmedPillText}>SESSION CONFIRMED</Text>
+          <View style={[styles.greenDot, done && { backgroundColor: THEME.colors.textMuted }]} />
+          <Text style={styles.confirmedPillText}>{done ? 'SESSION DONE' : 'SESSION CONFIRMED'}</Text>
         </View>
 
-        <TouchableOpacity
-          style={styles.inlineResetButton}
-          onPress={onResetDemo}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="refresh-outline" size={14} color={THEME.colors.deepTeal} />
-          <Text style={styles.inlineResetText}>Reset Demo</Text>
+        <TouchableOpacity style={styles.inlineResetButton} onPress={onBack} activeOpacity={0.7}>
+          <Ionicons name="arrow-back" size={14} color={THEME.colors.deepTeal} />
+          <Text style={styles.inlineResetText}>My squads</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Headline & Subhead */}
       <View style={styles.headerTextBox}>
-        <Text style={styles.headlineText}>{SESSION_DETAILS.confirmedTime}</Text>
-        <Text style={styles.subheadText}>{SESSION_DETAILS.subhead}</Text>
+        <Text style={styles.headlineText}>{formatWhen(squad.starts_at)}</Text>
+        <Text style={styles.subheadText}>
+          {done
+            ? squad.rated
+              ? 'Thanks for rating — it shapes who and where we match you next.'
+              : 'How did it go? Your rating shapes your next squad.'
+            : `${formatDate(squad.starts_at)} · You're locked in. Your squad is ready.`}
+        </Text>
       </View>
 
-      {/* Session Details Card */}
       <View style={styles.detailsCard}>
         <View style={styles.cardHeaderStrip}>
           <Text style={styles.cardHeaderTitle}>SESSION DETAILS</Text>
           <View style={styles.podTag}>
-            <Text style={styles.podTagText}>Pod 4B</Text>
+            <Text style={styles.podTagText}>{SQUAD_TYPE_LABEL[squad.activity.squad_type]}</Text>
           </View>
         </View>
 
-        {/* Location Item */}
         <View style={styles.detailItem}>
           <View style={[styles.detailIconBox, { backgroundColor: THEME.colors.deepTealLight }]}>
             <Ionicons name="location" size={18} color={THEME.colors.deepTeal} />
           </View>
           <View style={styles.detailContent}>
             <Text style={styles.detailLabel}>Location</Text>
-            <Text style={styles.detailValue}>{SESSION_DETAILS.location}</Text>
-            <Text style={styles.detailSubtext}>{SESSION_DETAILS.locationDetail}</Text>
+            <Text style={styles.detailValue}>{squad.venue.name}</Text>
+            {squad.venue.detail && <Text style={styles.detailSubtext}>{squad.venue.detail}</Text>}
           </View>
         </View>
 
         <View style={styles.divider} />
 
-        {/* Duration Item */}
         <View style={styles.detailItem}>
           <View style={[styles.detailIconBox, { backgroundColor: THEME.colors.primaryOrangeLight }]}>
             <Ionicons name="time" size={18} color={THEME.colors.primaryOrange} />
           </View>
           <View style={styles.detailContent}>
             <Text style={styles.detailLabel}>Duration</Text>
-            <Text style={styles.detailValue}>{SESSION_DETAILS.duration}</Text>
-            <Text style={styles.detailSubtext}>{SESSION_DETAILS.durationDetail}</Text>
+            <Text style={styles.detailValue}>{formatDuration(squad.activity.duration_mins)}</Text>
+            <Text style={styles.detailSubtext}>{formatRange(squad.starts_at, squad.ends_at)}</Text>
           </View>
         </View>
 
         <View style={styles.divider} />
 
-        {/* Focus Topic Item */}
         <View style={styles.detailItem}>
           <View style={[styles.detailIconBox, { backgroundColor: '#F0EFFF' }]}>
-            <Ionicons name="code-slash" size={18} color="#6366F1" />
+            <Ionicons name={squad.activity.icon as keyof typeof Ionicons.glyphMap} size={18} color="#6366F1" />
           </View>
           <View style={styles.detailContent}>
-            <Text style={styles.detailLabel}>Focus Topic</Text>
-            <Text style={styles.detailValue}>{SESSION_DETAILS.focusTopic}</Text>
-            <Text style={styles.detailSubtext}>{SESSION_DETAILS.focusTopicDetail}</Text>
+            <Text style={styles.detailLabel}>Focus</Text>
+            <Text style={styles.detailValue}>{squad.activity.title}</Text>
+            {squad.activity.description && (
+              <Text style={styles.detailSubtext}>{squad.activity.description}</Text>
+            )}
           </View>
         </View>
       </View>
 
-      {/* Your Squad Section */}
       <View style={styles.squadSection}>
         <View style={styles.squadSectionHeader}>
-          <Text style={styles.squadSectionTitle}>Your Squad (3)</Text>
-          <Text style={styles.squadSectionSub}>UNSW Verified</Text>
+          <Text style={styles.squadSectionTitle}>Your Squad ({accepted.length})</Text>
+          <Text style={styles.squadSectionSub}>UNSW verified</Text>
         </View>
 
         <View style={styles.membersList}>
-          {members.map((member) => (
+          {accepted.map((member, index) => (
             <View
-              key={member.id}
-              style={[
-                styles.memberCard,
-                member.isUser && styles.userMemberCard,
-              ]}
+              key={member.id ?? index}
+              style={[styles.memberCard, member.is_me && styles.userMemberCard]}
             >
-              <View style={[styles.memberAvatar, { backgroundColor: member.avatarColor }]}>
+              <View style={[styles.memberAvatar, { backgroundColor: member.avatar_color }]}>
                 <Text style={styles.memberAvatarInitials}>{member.initials}</Text>
-                {member.verifiedStudent && (
-                  <View style={styles.verifiedCheckBadge}>
-                    <Ionicons name="checkmark" size={9} color="#FFFFFF" />
-                  </View>
-                )}
+                <View style={styles.verifiedCheckBadge}>
+                  <Ionicons name="checkmark" size={9} color="#FFFFFF" />
+                </View>
               </View>
 
               <View style={styles.memberInfo}>
                 <View style={styles.memberNameRow}>
                   <Text style={styles.memberNameText}>
-                    {member.name} {member.isUser && '(You)'}
+                    {member.name} {member.is_me && '(You)'}
                   </Text>
-                  <View
-                    style={[
-                      styles.degreeTag,
-                      member.isUser ? styles.degreeTagUser : styles.degreeTagNormal,
-                    ]}
-                  >
+                  <View style={[styles.degreeTag, member.is_me ? styles.degreeTagUser : styles.degreeTagNormal]}>
                     <Text
                       style={[
                         styles.degreeTagText,
-                        member.isUser ? styles.degreeTagTextUser : styles.degreeTagTextNormal,
+                        member.is_me ? styles.degreeTagTextUser : styles.degreeTagTextNormal,
                       ]}
                     >
-                      {member.degree}
+                      {member.degree_short} · {yearLabel(member.year)} yr
                     </Text>
                   </View>
                 </View>
-                <Text style={styles.memberQuote}>{member.statusQuote}</Text>
+                {member.status_quote && <Text style={styles.memberQuote}>{member.status_quote}</Text>}
               </View>
             </View>
           ))}
         </View>
 
-        {/* Trust Banner: 🛡️ Public campus venue. Everyone is an active, verified UNSW student. */}
         <View style={styles.trustBanner}>
           <Text style={styles.trustShield}>🛡️</Text>
-          <Text style={styles.trustText}>{SESSION_DETAILS.trustBanner}</Text>
+          <Text style={styles.trustText}>
+            Public campus venue. Everyone is a verified UNSW student. You can only message people in this squad.
+          </Text>
         </View>
       </View>
 
-      {/* Bottom Action: Orange button "Add to Calendar" */}
       <View style={styles.bottomActionContainer}>
-        <TouchableOpacity
-          style={[
-            styles.calendarButton,
-            calendarAdded && styles.calendarButtonAdded,
-          ]}
-          onPress={handleAddToCalendar}
-          activeOpacity={0.85}
-          accessibilityLabel="Add session to calendar"
-        >
-          <Ionicons
-            name={calendarAdded ? 'checkmark-circle' : 'calendar'}
-            size={20}
-            color="#FFFFFF"
-          />
-          <Text style={styles.calendarButtonText}>
-            {calendarAdded ? 'Added to Calendar ✓' : 'Add to Calendar'}
-          </Text>
-        </TouchableOpacity>
+        {!done && (
+          <>
+            <TouchableOpacity
+              style={[styles.calendarButton, calendarAdded && styles.calendarButtonAdded]}
+              onPress={() => setCalendarAdded(true)}
+              activeOpacity={0.85}
+              accessibilityLabel="Add session to calendar"
+            >
+              <Ionicons name={calendarAdded ? 'checkmark-circle' : 'calendar'} size={20} color="#FFFFFF" />
+              <Text style={styles.calendarButtonText}>
+                {calendarAdded ? 'Added to Calendar ✓' : 'Add to Calendar'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={onEndSession}
+              disabled={busy}
+              activeOpacity={0.7}
+              accessibilityLabel="Demo: mark the session as finished"
+            >
+              <Ionicons name="play-skip-forward" size={16} color={THEME.colors.deepTeal} />
+              <Text style={styles.secondaryButtonText}>Demo: skip to after the session</Text>
+            </TouchableOpacity>
+          </>
+        )}
+
+        {done && !squad.rated && (
+          <TouchableOpacity style={styles.calendarButton} onPress={onRate} activeOpacity={0.85}>
+            <Ionicons name="star" size={20} color="#FFFFFF" />
+            <Text style={styles.calendarButtonText}>Rate this session</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </ScrollView>
   );
@@ -485,5 +483,18 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: 0.2,
+  },
+  secondaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 12,
+    paddingVertical: 12,
+  },
+  secondaryButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: THEME.colors.deepTeal,
   },
 });

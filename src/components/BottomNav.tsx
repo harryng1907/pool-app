@@ -7,14 +7,14 @@ import { TabType } from '../types';
 interface BottomNavProps {
   activeTab: TabType;
   onSelectTab: (tab: TabType) => void;
-  hasSquad?: boolean;
+  badgeCount?: number;
   bottomInset?: number;
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({
   activeTab,
   onSelectTab,
-  hasSquad = false,
+  badgeCount = 0,
   bottomInset = 0,
 }) => {
   const tabs: { key: TabType; label: string; activeIcon: keyof typeof Ionicons.glyphMap; inactiveIcon: keyof typeof Ionicons.glyphMap }[] = [
@@ -59,9 +59,9 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                   size={24}
                   color={isActive ? THEME.colors.deepTeal : THEME.colors.textMuted}
                 />
-                {tab.key === 'squads' && hasSquad && (
+                {tab.key === 'squads' && badgeCount > 0 && (
                   <View style={styles.squadBadge}>
-                    <Text style={styles.squadBadgeText}>1</Text>
+                    <Text style={styles.squadBadgeText}>{badgeCount}</Text>
                   </View>
                 )}
               </View>

@@ -6,108 +6,159 @@ import {
   TouchableOpacity,
   ScrollView,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { THEME } from '../theme';
+import { Me } from '../types';
+import { yearLabel } from '../lib/format';
 
 interface ProfileScreenProps {
+  me: Me | null;
+  busy: boolean;
   onResetDemo: () => void;
-  onNavigateToScreen: (screen: 'discover' | 'squads' | 'confirmed') => void;
+  onOpenMetrics: () => void;
+  onSignOut: () => void;
 }
 
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const hour = (h: number) => (h === 12 ? '12pm' : h > 12 ? `${h - 12}pm` : `${h}am`);
+const GROUP_PREF = { one: 'Just one person', small: 'A small group (3–4)', any: 'Either is fine' };
+
+// Only you can see this page. Squad-mates see your name, degree and status line after a squad confirms.
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({
+  me,
+  busy,
   onResetDemo,
-  onNavigateToScreen,
+  onOpenMetrics,
+  onSignOut,
 }) => {
+  if (!me) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator color={THEME.colors.primaryOrange} />
+      </View>
+    );
+  }
+
+  const isDemo = me.email.endsWith('@pool.demo');
+
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
     >
-      {/* Student Profile Card */}
       <View style={styles.profileCard}>
         <View style={styles.profileHeaderRow}>
-          <View style={styles.avatarBig}>
-            <Text style={styles.avatarBigText}>MY</Text>
+          <View style={[styles.avatarBig, { backgroundColor: me.avatar_color }]}>
+            <Text style={styles.avatarBigText}>{me.initials}</Text>
             <View style={styles.verifiedBadge}>
               <Ionicons name="checkmark" size={12} color="#FFFFFF" />
             </View>
           </View>
           <View style={styles.profileNameBox}>
             <View style={styles.nameRow}>
-              <Text style={styles.studentName}>Maya Lin</Text>
+              <Text style={styles.studentName}>{me.full_name ?? me.name}</Text>
               <View style={styles.unswTag}>
                 <Text style={styles.unswTagText}>UNSW</Text>
               </View>
             </View>
-            <Text style={styles.degreeText}>Computer Science (1st Year)</Text>
-            <Text style={styles.zidText}>zID: z5348821 · Active Student</Text>
+            <Text style={styles.degreeText}>
+              {me.degree} ({yearLabel(me.year)} Year)
+            </Text>
+            <Text style={styles.zidText}>{me.email}</Text>
           </View>
         </View>
 
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
-            <Text style={styles.statNumber}>3</Text>
-            <Text style={styles.statLabel}>Squads Done</Text>
+            <Text style={styles.statNumber}>{me.stats.squads_done}</Text>
+            <Text style={styles.statLabel}>Sessions Done</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statBox}>
-            <Text style={styles.statNumber}>98%</Text>
-            <Text style={styles.statLabel}>Avg Fit</Text>
+            <Text style={styles.statNumber}>{me.stats.people_met}</Text>
+            <Text style={styles.statLabel}>People Met</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statBox}>
-            <Text style={styles.statNumber}>12 hrs</Text>
-            <Text style={styles.statLabel}>Focus Time</Text>
+            <Text style={styles.statNumber}>{me.stats.hours} hrs</Text>
+            <Text style={styles.statLabel}>Together</Text>
           </View>
         </View>
       </View>
 
-      {/* Preferences Card */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Study Preferences</Text>
-
-        <View style={styles.prefItem}>
-          <View style={styles.prefIconBox}>
-            <Ionicons name="timer-outline" size={18} color={THEME.colors.deepTeal} />
-          </View>
-          <View style={styles.prefContent}>
-            <Text style={styles.prefLabel}>STUDY RHYTHM</Text>
-            <Text style={styles.prefValue}>Pomodoro 50/10 Focus Intervals</Text>
-          </View>
-        </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.prefItem}>
-          <View style={styles.prefIconBox}>
-            <Ionicons name="volume-mute-outline" size={18} color={THEME.colors.deepTeal} />
-          </View>
-          <View style={styles.prefContent}>
-            <Text style={styles.prefLabel}>ENVIRONMENT</Text>
-            <Text style={styles.prefValue}>Quiet focused study / Silent sprint</Text>
-          </View>
-        </View>
-
-        <View style={styles.divider} />
+        <Text style={styles.cardTitle}>What the matcher knows</Text>
 
         <View style={styles.prefItem}>
           <View style={styles.prefIconBox}>
             <Ionicons name="book-outline" size={18} color={THEME.colors.deepTeal} />
           </View>
           <View style={styles.prefContent}>
-            <Text style={styles.prefLabel}>CURRENT COURSES</Text>
-            <Text style={styles.prefValue}>COMP1511, MATH1081, DESN1000</Text>
+            <Text style={styles.prefLabel}>COURSES</Text>
+            <Text style={styles.prefValue}>{me.courses.join(', ') || '—'}</Text>
+          </View>
+        </View>
+
+        <View style={styles.divider} />
+
+        <View style={styles.prefItem}>
+          <View style={styles.prefIconBox}>
+            <Ionicons name="time-outline" size={18} color={THEME.colors.deepTeal} />
+          </View>
+          <View style={styles.prefContent}>
+            <Text style={styles.prefLabel}>FREE TIMES</Text>
+            <Text style={styles.prefValue}>
+              {me.availability.map((a) => `${DAYS[a.dow]} ${hour(a.start)}–${hour(a.end)}`).join(' · ') || '—'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.divider} />
+
+        <View style={styles.prefItem}>
+          <View style={styles.prefIconBox}>
+            <Ionicons name="people-outline" size={18} color={THEME.colors.deepTeal} />
+          </View>
+          <View style={styles.prefContent}>
+            <Text style={styles.prefLabel}>SQUAD SIZE</Text>
+            <Text style={styles.prefValue}>{GROUP_PREF[me.group_pref]}</Text>
+          </View>
+        </View>
+
+        {me.vibe && (
+          <>
+            <View style={styles.divider} />
+            <View style={styles.prefItem}>
+              <View style={styles.prefIconBox}>
+                <Ionicons name="chatbubble-ellipses-outline" size={18} color={THEME.colors.deepTeal} />
+              </View>
+              <View style={styles.prefContent}>
+                <Text style={styles.prefLabel}>IN YOUR WORDS</Text>
+                <Text style={styles.prefValue}>"{me.vibe}"</Text>
+              </View>
+            </View>
+          </>
+        )}
+
+        <View style={styles.divider} />
+        <View style={styles.prefItem}>
+          <View style={styles.prefIconBox}>
+            <Ionicons name="lock-closed-outline" size={18} color={THEME.colors.deepTeal} />
+          </View>
+          <View style={styles.prefContent}>
+            <Text style={styles.prefLabel}>WHO CAN SEE THIS</Text>
+            <Text style={styles.prefValue}>Only you. Squad-mates see your name and degree after a squad confirms.</Text>
           </View>
         </View>
       </View>
 
-      {/* Hackathon Pitch Demo Helper */}
       <View style={styles.demoCard}>
         <View style={styles.demoCardHeader}>
           <View style={styles.demoBadge}>
-            <Text style={styles.demoBadgeText}>DEMO SHORTCUTS</Text>
+            <Text style={styles.demoBadgeText}>{isDemo ? 'DEMO CONTROLS' : 'APP'}</Text>
           </View>
           <Image
             source={require('../../assets/logo_dark.png')}
@@ -116,48 +167,28 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           />
         </View>
 
-        <Text style={styles.demoTitle}>Hackathon Pitch Controls</Text>
-        <Text style={styles.demoSubtitle}>
-          Jump directly to any screen in the 3-screen presentation flow:
-        </Text>
-
         <View style={styles.shortcutButtons}>
-          <TouchableOpacity
-            style={styles.shortcutBtn}
-            onPress={() => onNavigateToScreen('discover')}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="compass" size={16} color={THEME.colors.deepTeal} />
-            <Text style={styles.shortcutBtnText}>1. Discover</Text>
+          <TouchableOpacity style={styles.shortcutBtn} onPress={onOpenMetrics} activeOpacity={0.7}>
+            <Ionicons name="stats-chart" size={16} color={THEME.colors.deepTeal} />
+            <Text style={styles.shortcutBtnText}>Metrics</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.shortcutBtn}
-            onPress={() => onNavigateToScreen('squads')}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="people" size={16} color={THEME.colors.primaryOrange} />
-            <Text style={styles.shortcutBtnText}>2. Squad Ready</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.shortcutBtn}
-            onPress={() => onNavigateToScreen('confirmed')}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="checkmark-done" size={16} color={THEME.colors.successGreen} />
-            <Text style={styles.shortcutBtnText}>3. Confirmed</Text>
+          <TouchableOpacity style={styles.shortcutBtn} onPress={onSignOut} activeOpacity={0.7}>
+            <Ionicons name="log-out-outline" size={16} color={THEME.colors.primaryOrange} />
+            <Text style={styles.shortcutBtnText}>Sign out</Text>
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity
-          style={styles.resetFullBtn}
-          onPress={onResetDemo}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="reload" size={16} color="#FFFFFF" />
-          <Text style={styles.resetFullBtnText}>Reset to Start of Pitch</Text>
-        </TouchableOpacity>
+        {isDemo && (
+          <TouchableOpacity
+            style={[styles.resetFullBtn, busy && { opacity: 0.6 }]}
+            onPress={onResetDemo}
+            disabled={busy}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="reload" size={16} color="#FFFFFF" />
+            <Text style={styles.resetFullBtnText}>Reset my swipes & squads</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </ScrollView>
   );

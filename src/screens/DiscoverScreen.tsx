@@ -1,32 +1,58 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { THEME } from '../theme';
-import { ActivityEvent } from '../types';
+import { ActivityCard, Nudge } from '../types';
+import { formatDuration, formatWhen, SQUAD_TYPE_LABEL } from '../lib/format';
+
+type IconName = keyof typeof Ionicons.glyphMap;
+
+const TYPE_ICON: Record<ActivityCard['squad_type'], IconName> = {
+  deadline: 'hourglass-outline',
+  hobby: 'sparkles',
+  career: 'trending-up',
+};
+
+const CATEGORY_PLACE: Record<ActivityCard['category'], string> = {
+  quiet: 'Quiet study spot',
+  social: 'Social campus spot',
+  active: 'Sports centre',
+  maker: 'Makerspace',
+  food: 'Campus café',
+};
 
 interface DiscoverScreenProps {
-  events: ActivityEvent[];
-  onImIn: (event: ActivityEvent) => void;
-  onNotForMe: () => void;
-  currentIndex: number;
+  cards: ActivityCard[];
+  loading: boolean;
+  busy: boolean;
+  notice: string | null;
+  nudges: Nudge[];
+  onImIn: (card: ActivityCard) => void;
+  onNotForMe: (card: ActivityCard) => void;
+  onRebook: (nudge: Nudge) => void;
+  onRefresh: () => void;
 }
 
 export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
-  events,
+  cards,
+  loading,
+  busy,
+  notice,
+  nudges,
   onImIn,
   onNotForMe,
-  currentIndex,
+  onRebook,
+  onRefresh,
 }) => {
-  const currentEvent = events[currentIndex % events.length];
-  // Calculate displayed count matching spec "2 of 3" (or dynamically based on index)
-  const displayCount = `${currentIndex + 1} of ${events.length}`;
+  const card = cards[0];
+  const nudge = nudges[0];
 
   return (
     <ScrollView
@@ -34,133 +60,192 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
     >
-      {/* Tag banner: ● ACTIVE EVENTS and 2 of 3 count */}
+      {/* "Go again?" — built from your past ratings */}
+      {nudge && (
+        <TouchableOpacity
+          style={styles.nudgeCard}
+          onPress={() => onRebook(nudge)}
+          activeOpacity={0.85}
+          disabled={busy}
+          accessibilityLabel={`Book again with ${nudge.names.join(', ')}`}
+        >
+          <View style={styles.nudgeIcon}>
+            <Ionicons name="repeat" size={20} color="#FFFFFF" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.nudgeTitle}>
+              Go again with {nudge.names.join(' & ')}?
+            </Text>
+            <Text style={styles.nudgeSub}>
+              You rated them {nudge.top_score}★ after {nudge.activity_title}
+              {nudge.venue_score != null && nudge.venue_score <= 2 && nudge.venue_name
+                ? ` · we'll skip ${nudge.venue_name}`
+                : ''}
+            </Text>
+          </View>
+          <Ionicons name="arrow-forward" size={18} color={THEME.colors.deepTeal} />
+        </TouchableOpacity>
+      )}
+
+      {notice && (
+        <View style={styles.noticeBox}>
+          <Ionicons name="information-circle" size={18} color={THEME.colors.deepTeal} />
+          <Text style={styles.noticeText}>{notice}</Text>
+        </View>
+      )}
+
       <View style={styles.bannerRow}>
         <View style={styles.activeBannerPill}>
           <View style={styles.orangeDot} />
-          <Text style={styles.activeBannerText}>ACTIVE EVENTS</Text>
+          <Text style={styles.activeBannerText}>ACTIVITIES FOR YOU</Text>
         </View>
-        <View style={styles.countPill}>
-          <Text style={styles.countText}>{displayCount}</Text>
-        </View>
+        {cards.length > 0 && (
+          <View style={styles.countPill}>
+            <Text style={styles.countText}>{cards.length} left</Text>
+          </View>
+        )}
       </View>
 
-      {/* Centered Activity Card */}
-      <View style={styles.cardWrapper}>
-        {/* Subtle stack card behind for deck depth */}
-        <View style={styles.stackCardBack} />
+      {loading && !card ? (
+        <View style={styles.emptyCard}>
+          <ActivityIndicator color={THEME.colors.primaryOrange} />
+        </View>
+      ) : !card ? (
+        <View style={styles.emptyCard}>
+          <Ionicons name="checkmark-done-circle" size={44} color={THEME.colors.deepTeal} />
+          <Text style={styles.emptyTitle}>You've seen everything</Text>
+          <Text style={styles.emptySub}>New sessions get added every week. Check your squads in the meantime.</Text>
+          <TouchableOpacity style={styles.refreshBtn} onPress={onRefresh} activeOpacity={0.8}>
+            <Ionicons name="refresh" size={16} color={THEME.colors.deepTeal} />
+            <Text style={styles.refreshText}>Refresh</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <>
+          <View style={styles.cardWrapper}>
+            {cards.length > 1 && <View style={styles.stackCardBack} />}
 
-        <View style={styles.card}>
-          {/* Header badge */}
-          <View style={styles.badgeRow}>
-            <View style={styles.cohortBadge}>
-              <Ionicons name="school" size={13} color={THEME.colors.deepTeal} />
-              <Text style={styles.cohortBadgeText}>{currentEvent.badge}</Text>
-            </View>
-            <View style={styles.verifiedCampusTag}>
-              <Ionicons name="checkmark-circle" size={13} color={THEME.colors.successGreen} />
-              <Text style={styles.verifiedCampusText}>UNSW Verified</Text>
-            </View>
-          </View>
-
-          {/* Title */}
-          <Text style={styles.cardTitle}>{currentEvent.title}</Text>
-
-          {/* Time & Place */}
-          <View style={styles.timePlaceBox}>
-            <View style={styles.timePlaceRow}>
-              <View style={styles.iconCircle}>
-                <Ionicons name="calendar-outline" size={16} color={THEME.colors.primaryOrange} />
+            <View style={styles.card}>
+              <View style={styles.badgeRow}>
+                <View style={styles.cohortBadge}>
+                  <Ionicons
+                    name={card.course ? 'school' : TYPE_ICON[card.squad_type]}
+                    size={13}
+                    color={THEME.colors.deepTeal}
+                  />
+                  <Text style={styles.cohortBadgeText}>
+                    {(card.course ?? SQUAD_TYPE_LABEL[card.squad_type]).toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.verifiedCampusTag}>
+                  <Ionicons
+                    name={card.kind === 'session' ? 'radio-button-on' : 'sparkles'}
+                    size={13}
+                    color={card.kind === 'session' ? THEME.colors.successGreen : THEME.colors.primaryOrange}
+                  />
+                  <Text style={styles.verifiedCampusText}>
+                    {card.kind === 'session' ? 'Real session' : 'AI picks the time'}
+                  </Text>
+                </View>
               </View>
-              <Text style={styles.timePlaceText}>Thursday 2:00 PM</Text>
-            </View>
 
-            <View style={styles.timePlaceRow}>
-              <View style={styles.iconCircle}>
-                <Ionicons name="location-outline" size={16} color={THEME.colors.deepTeal} />
+              <View style={styles.titleRow}>
+                <View style={styles.cardIcon}>
+                  <Ionicons name={card.icon as IconName} size={26} color={THEME.colors.primaryOrange} />
+                </View>
+                <Text style={styles.cardTitle}>{card.title}</Text>
               </View>
-              <Text style={styles.timePlaceText}>Law Library L2</Text>
-              <Text style={styles.timePlaceDot}>·</Text>
-              <Text style={styles.timePlaceDuration}>~3 hrs</Text>
-            </View>
-          </View>
 
-          {/* Tags */}
-          <View style={styles.tagsContainer}>
-            {currentEvent.tags.map((tag, idx) => {
-              const isSpotTag = tag.includes('spots');
-              return (
-                <View
-                  key={idx}
-                  style={[
-                    styles.tagPill,
-                    isSpotTag ? styles.spotTagPill : styles.regularTagPill,
-                  ]}
-                >
-                  {isSpotTag && (
+              <View style={styles.timePlaceBox}>
+                <View style={styles.timePlaceRow}>
+                  <View style={styles.iconCircle}>
+                    <Ionicons name="calendar-outline" size={16} color={THEME.colors.primaryOrange} />
+                  </View>
+                  <Text style={styles.timePlaceText}>
+                    {card.starts_at ? formatWhen(card.starts_at) : 'When your squad is all free'}
+                  </Text>
+                </View>
+
+                <View style={styles.timePlaceRow}>
+                  <View style={styles.iconCircle}>
+                    <Ionicons name="location-outline" size={16} color={THEME.colors.deepTeal} />
+                  </View>
+                  <Text style={styles.timePlaceText} numberOfLines={1}>
+                    {card.venue?.name ?? CATEGORY_PLACE[card.category]}
+                  </Text>
+                  <Text style={styles.timePlaceDot}>·</Text>
+                  <Text style={styles.timePlaceDuration}>{formatDuration(card.duration_mins)}</Text>
+                </View>
+              </View>
+
+              <View style={styles.tagsContainer}>
+                {card.tags
+                  .filter((t) => t !== card.course)
+                  .map((tag) => (
+                    <View key={tag} style={[styles.tagPill, styles.regularTagPill]}>
+                      <Text style={[styles.tagText, styles.regularTagText]}>{tag}</Text>
+                    </View>
+                  ))}
+                {card.spots_left != null && (
+                  <View style={[styles.tagPill, styles.spotTagPill]}>
                     <Ionicons
                       name="people-outline"
                       size={12}
                       color={THEME.colors.primaryOrange}
                       style={{ marginRight: 4 }}
                     />
-                  )}
-                  <Text
-                    style={[
-                      styles.tagText,
-                      isSpotTag ? styles.spotTagText : styles.regularTagText,
-                    ]}
-                  >
-                    {tag}
-                  </Text>
+                    <Text style={[styles.tagText, styles.spotTagText]}>
+                      {card.spots_left} of {card.capacity} spots
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {card.description && (
+                <View style={styles.descriptionBox}>
+                  <Text style={styles.descriptionText}>{card.description}</Text>
                 </View>
-              );
-            })}
+              )}
+
+              <View style={styles.subtextContainer}>
+                <View style={styles.fireIconWrapper}>
+                  <Ionicons name="flame" size={15} color={THEME.colors.primaryOrange} />
+                </View>
+                <Text style={styles.subtext}>
+                  {card.interested_count === 0
+                    ? 'Be the first to say yes'
+                    : `${card.interested_count} student${card.interested_count === 1 ? '' : 's'} said "I'm in"`}
+                </Text>
+              </View>
+            </View>
           </View>
 
-          {/* Activity Description snippet */}
-          {currentEvent.description && (
-            <View style={styles.descriptionBox}>
-              <Text style={styles.descriptionText}>
-                "{currentEvent.description}"
-              </Text>
-            </View>
-          )}
+          <View style={styles.actionsContainer}>
+            <TouchableOpacity
+              style={[styles.notForMeButton, busy && styles.disabled]}
+              onPress={() => onNotForMe(card)}
+              disabled={busy}
+              activeOpacity={0.7}
+              accessibilityLabel="Not for me, show next activity"
+            >
+              <Ionicons name="close" size={20} color={THEME.colors.grayButtonText} />
+              <Text style={styles.notForMeText}>Not for me</Text>
+            </TouchableOpacity>
 
-          {/* Subtext */}
-          <View style={styles.subtextContainer}>
-            <View style={styles.fireIconWrapper}>
-              <Ionicons name="flame" size={15} color={THEME.colors.primaryOrange} />
-            </View>
-            <Text style={styles.subtext}>{currentEvent.subtext}</Text>
+            <TouchableOpacity
+              style={[styles.imInButton, busy && styles.disabled]}
+              onPress={() => onImIn(card)}
+              disabled={busy}
+              activeOpacity={0.85}
+              accessibilityLabel="I'm in, find me a squad"
+            >
+              <Text style={styles.imInText}>I'm in</Text>
+              <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
           </View>
-        </View>
-      </View>
+        </>
+      )}
 
-      {/* Two bottom action buttons: "Not for me" and "I'm in" */}
-      <View style={styles.actionsContainer}>
-        <TouchableOpacity
-          style={styles.notForMeButton}
-          onPress={onNotForMe}
-          activeOpacity={0.7}
-          accessibilityLabel="Not for me, show next event"
-        >
-          <Ionicons name="close" size={20} color={THEME.colors.grayButtonText} />
-          <Text style={styles.notForMeText}>Not for me</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.imInButton}
-          onPress={() => onImIn(currentEvent)}
-          activeOpacity={0.85}
-          accessibilityLabel="I'm in, join this squad"
-        >
-          <Text style={styles.imInText}>I'm in</Text>
-          <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Pro tip hint */}
       <View style={styles.hintContainer}>
         <Text style={styles.hintText}>
           Swipe on things you'd want to do, not on people.
@@ -276,11 +361,11 @@ const styles = StyleSheet.create({
     color: THEME.colors.textSecondary,
   },
   cardTitle: {
-    fontSize: 24,
+    flex: 1,
+    fontSize: 22,
     fontWeight: '800',
     color: THEME.colors.textPrimary,
-    lineHeight: 31,
-    marginBottom: 14,
+    lineHeight: 28,
     letterSpacing: -0.4,
   },
   timePlaceBox: {
@@ -365,7 +450,6 @@ const styles = StyleSheet.create({
   descriptionText: {
     fontSize: 13,
     color: THEME.colors.textSecondary,
-    fontStyle: 'italic',
     lineHeight: 18,
   },
   subtextContainer: {
@@ -434,5 +518,106 @@ const styles = StyleSheet.create({
     color: THEME.colors.textMuted,
     fontStyle: 'italic',
     textAlign: 'center',
+  },
+  disabled: {
+    opacity: 0.5,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 14,
+  },
+  cardIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: THEME.colors.primaryOrangeLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nudgeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: THEME.colors.deepTealLight,
+    borderRadius: 20,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#CDE5E9',
+  },
+  nudgeIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: THEME.colors.deepTeal,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nudgeTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: THEME.colors.deepTealDark,
+  },
+  nudgeSub: {
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+    marginTop: 2,
+  },
+  noticeBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: THEME.colors.cardWhite,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+  },
+  noticeText: {
+    flex: 1,
+    fontSize: 13,
+    color: THEME.colors.textSecondary,
+    lineHeight: 18,
+  },
+  emptyCard: {
+    backgroundColor: THEME.colors.cardWhite,
+    borderRadius: THEME.radii.card,
+    padding: 32,
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    marginBottom: 20,
+    minHeight: 260,
+    justifyContent: 'center',
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: THEME.colors.textPrimary,
+  },
+  emptySub: {
+    fontSize: 13,
+    color: THEME.colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+  refreshBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: THEME.radii.pill,
+    backgroundColor: THEME.colors.deepTealLight,
+  },
+  refreshText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: THEME.colors.deepTeal,
   },
 });

@@ -5,167 +5,188 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { THEME } from '../theme';
-import { SquadMember, MatchReason } from '../types';
+import { Squad } from '../types';
+import { formatDate, formatWhen, yearLabel } from '../lib/format';
 
 interface SquadsScreenProps {
-  members: SquadMember[];
-  reasons: MatchReason[];
-  onLooksGood: () => void;
-  onExploreMore?: () => void;
+  squad: Squad;
+  busy: boolean;
+  onAccept: () => void;
+  onDecline: () => void;
+  onBack: () => void;
 }
 
+// The proposed squad: who (anonymised until everyone accepts), why, when and where.
 export const SquadsScreen: React.FC<SquadsScreenProps> = ({
-  members,
-  reasons,
-  onLooksGood,
-  onExploreMore,
+  squad,
+  busy,
+  onAccept,
+  onDecline,
+  onBack,
 }) => {
+  const others = squad.members.filter((m) => !m.is_me);
+  const waitingOn = others.filter((m) => m.status === 'invited').length;
+  const iAccepted = squad.my_status === 'accepted';
+
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
     >
-      {/* Hero Header Text */}
       <View style={styles.heroSection}>
         <View style={styles.squadReadyPill}>
           <View style={styles.greenDot} />
-          <Text style={styles.squadReadyPillText}>SQUAD FORMED</Text>
+          <Text style={styles.squadReadyPillText}>
+            {squad.rebook_of ? 'SQUAD RE-FORMED' : 'SQUAD FORMED'}
+          </Text>
         </View>
-        <Text style={styles.heroTitle}>Your squad is ready</Text>
+        <Text style={styles.heroTitle}>
+          {iAccepted ? `Waiting on ${waitingOn} more` : 'Your squad is ready'}
+        </Text>
         <Text style={styles.heroSubtitle}>
-          We matched you with 2 fellow students who share your schedule and study style.
+          {others.length === 1 ? '1 student' : `${others.length} students`} for{' '}
+          <Text style={{ fontWeight: '800', color: THEME.colors.textPrimary }}>{squad.activity.title}</Text>
         </Text>
       </View>
 
-      {/* Avatars Row: 3 overlapping circles with badges */}
       <View style={styles.avatarsCard}>
         <View style={styles.overlapRow}>
-          {members.map((member, index) => {
-            return (
-              <View
-                key={member.id}
-                style={[
-                  styles.avatarWrapper,
-                  index > 0 && styles.avatarOverlap,
-                  { zIndex: 10 - index },
-                ]}
-              >
-                <View
-                  style={[
-                    styles.avatarCircle,
-                    { backgroundColor: member.avatarColor },
-                  ]}
-                >
-                  <Text style={styles.avatarInitialsText}>{member.initials}</Text>
-                  {member.isUser && (
-                    <View style={styles.youIndicator}>
-                      <Ionicons name="star" size={10} color="#FFFFFF" />
-                    </View>
-                  )}
-                </View>
-              </View>
-            );
-          })}
-        </View>
-
-        {/* Badges for each member: Mei (CS · 1st yr), Tomas (ENG · 1st yr), Maya (YOU) */}
-        <View style={styles.memberBadgesRow}>
-          {members.map((member) => (
+          {squad.members.map((member, index) => (
             <View
-              key={member.id}
-              style={[
-                styles.memberBadgeBox,
-                member.isUser && styles.memberBadgeBoxUser,
-              ]}
+              key={member.id ?? `hidden-${index}`}
+              style={[styles.avatarWrapper, index > 0 && styles.avatarOverlap, { zIndex: 10 - index }]}
             >
-              <View style={styles.memberBadgeHeader}>
-                <Text style={styles.memberName}>{member.name}</Text>
-                {member.verifiedStudent && (
-                  <Ionicons name="checkmark-circle" size={12} color={THEME.colors.deepTeal} />
+              <View style={[styles.avatarCircle, { backgroundColor: member.avatar_color }]}>
+                {member.hidden ? (
+                  <Ionicons name="eye-off" size={22} color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.avatarInitialsText}>{member.initials}</Text>
+                )}
+                {member.is_me && (
+                  <View style={styles.youIndicator}>
+                    <Ionicons name="star" size={10} color="#FFFFFF" />
+                  </View>
                 )}
               </View>
-              <View
-                style={[
-                  styles.roleTag,
-                  member.isUser ? styles.roleTagUser : styles.roleTagNormal,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.roleTagText,
-                    member.isUser ? styles.roleTagTextUser : styles.roleTagTextNormal,
-                  ]}
-                >
-                  {member.role}
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.memberBadgesRow}>
+          {squad.members.map((member, index) => (
+            <View
+              key={member.id ?? `badge-${index}`}
+              style={[styles.memberBadgeBox, member.is_me && styles.memberBadgeBoxUser]}
+            >
+              <View style={styles.memberBadgeHeader}>
+                <Text style={styles.memberName} numberOfLines={1}>
+                  {member.is_me ? 'You' : member.hidden ? 'Hidden' : member.name}
+                </Text>
+                {member.status === 'accepted' && !member.is_me && (
+                  <Ionicons name="checkmark-circle" size={12} color={THEME.colors.successGreen} />
+                )}
+              </View>
+              <View style={[styles.roleTag, member.is_me ? styles.roleTagUser : styles.roleTagNormal]}>
+                <Text style={[styles.roleTagText, member.is_me ? styles.roleTagTextUser : styles.roleTagTextNormal]}>
+                  {member.degree_short} · {yearLabel(member.year)} yr
                 </Text>
               </View>
             </View>
           ))}
         </View>
+
+        {!squad.revealed && (
+          <View style={styles.privacyNote}>
+            <Ionicons name="lock-closed" size={13} color={THEME.colors.textMuted} />
+            <Text style={styles.privacyText}>Names and faces appear once everyone says yes</Text>
+          </View>
+        )}
       </View>
 
-      {/* "Why You Matched" Card (98% Fit badge) */}
       <View style={styles.matchCard}>
         <View style={styles.matchHeader}>
           <View style={styles.matchHeaderTitleRow}>
             <Ionicons name="sparkles" size={18} color={THEME.colors.primaryOrange} />
-            <Text style={styles.matchCardTitle}>Why You Matched</Text>
-          </View>
-          <View style={styles.fitBadge}>
-            <Text style={styles.fitBadgeText}>98% Fit</Text>
+            <Text style={styles.matchCardTitle}>Why you matched</Text>
           </View>
         </View>
 
         <View style={styles.reasonsList}>
-          {reasons.map((reason) => (
-            <View key={reason.id} style={styles.reasonItem}>
+          {squad.reasons.map((reason) => (
+            <View key={reason} style={styles.reasonItem}>
               <View style={styles.checkCircle}>
                 <Ionicons name="checkmark" size={14} color="#FFFFFF" />
               </View>
-              <Text style={styles.reasonText}>{reason.text}</Text>
+              <Text style={styles.reasonText}>{reason}</Text>
             </View>
           ))}
         </View>
 
-        {/* Location hint: 📍 Main Library, Level 4 Pod (SUGGESTED) */}
         <View style={styles.locationHintBox}>
+          <View style={styles.locationIconWrapper}>
+            <Ionicons name="calendar" size={16} color={THEME.colors.primaryOrange} />
+          </View>
+          <View style={styles.locationTextWrapper}>
+            <Text style={styles.locationHintTitle}>WHEN · {formatDate(squad.starts_at).toUpperCase()}</Text>
+            <Text style={styles.locationHintDetail}>{formatWhen(squad.starts_at)}</Text>
+          </View>
+        </View>
+
+        <View style={[styles.locationHintBox, { marginTop: 8 }]}>
           <View style={styles.locationIconWrapper}>
             <Ionicons name="location" size={16} color={THEME.colors.deepTeal} />
           </View>
           <View style={styles.locationTextWrapper}>
-            <Text style={styles.locationHintTitle}>SUGGESTED VENUE</Text>
-            <Text style={styles.locationHintDetail}>
-              Main Library, Level 4 Pod
-            </Text>
+            <Text style={styles.locationHintTitle}>WHERE · PUBLIC CAMPUS SPOT</Text>
+            <Text style={styles.locationHintDetail}>{squad.venue.name}</Text>
           </View>
         </View>
       </View>
 
-      {/* Bottom CTA: Large orange button "Looks good" with celebration icon */}
       <View style={styles.ctaContainer}>
-        <TouchableOpacity
-          style={styles.looksGoodButton}
-          onPress={onLooksGood}
-          activeOpacity={0.85}
-          accessibilityLabel="Looks good, confirm this squad"
-        >
-          <Text style={styles.looksGoodText}>Looks good</Text>
-          <Text style={styles.celebrationEmoji}>🎉</Text>
-        </TouchableOpacity>
-
-        {onExploreMore && (
-          <TouchableOpacity
-            style={styles.exploreMoreButton}
-            onPress={onExploreMore}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.exploreMoreText}>Back to Discover</Text>
-          </TouchableOpacity>
+        {iAccepted ? (
+          <View style={styles.waitingBox}>
+            <ActivityIndicator color={THEME.colors.deepTeal} />
+            <Text style={styles.waitingText}>
+              You're in. We'll reveal everyone when the last {waitingOn === 1 ? 'person accepts' : `${waitingOn} accept`}.
+            </Text>
+          </View>
+        ) : (
+          <>
+            <TouchableOpacity
+              style={[styles.looksGoodButton, busy && { opacity: 0.6 }]}
+              onPress={onAccept}
+              disabled={busy}
+              activeOpacity={0.85}
+              accessibilityLabel="Looks good, join this squad"
+            >
+              {busy ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <>
+                  <Text style={styles.looksGoodText}>Looks good</Text>
+                  <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
+                </>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.exploreMoreButton}
+              onPress={onDecline}
+              disabled={busy}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.exploreMoreText}>Not this time</Text>
+            </TouchableOpacity>
+          </>
         )}
+        <TouchableOpacity style={styles.exploreMoreButton} onPress={onBack} activeOpacity={0.7}>
+          <Text style={styles.exploreMoreText}>Back to my squads</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -454,5 +475,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: THEME.colors.textSecondary,
+  },
+  privacyNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 14,
+  },
+  privacyText: {
+    fontSize: 12,
+    color: THEME.colors.textMuted,
+    fontWeight: '600',
+  },
+  waitingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: THEME.colors.deepTealLight,
+    borderRadius: 18,
+    padding: 16,
+  },
+  waitingText: {
+    flex: 1,
+    fontSize: 14,
+    color: THEME.colors.deepTealDark,
+    fontWeight: '600',
+    lineHeight: 20,
   },
 });
