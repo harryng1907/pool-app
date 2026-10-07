@@ -40,6 +40,7 @@ create table public.profiles (
   status_quote  text,          -- shown to squad-mates after reveal
   group_pref    text not null default 'small' check (group_pref in ('one','small','any')),
   interests     text[] not null default '{}',  -- hobbies picked in onboarding (same vocabulary as activity tags)
+  real_only     boolean not null default false,  -- never match with simulated students
   is_seed       boolean not null default false,  -- simulated students for the demo
   onboarded_at  timestamptz,
   created_at    timestamptz not null default now()

@@ -99,6 +99,7 @@ export interface Me {
   vibe: string | null;
   status_quote: string | null;
   group_pref: 'one' | 'small' | 'any';
+  real_only: boolean;
   interests: string[];
   onboarded: boolean;
   email: string;
@@ -127,6 +128,7 @@ export interface ProfileInput {
   degree_short?: string;
   year?: number;
   group_pref?: 'one' | 'small' | 'any';
+  real_only?: boolean;
   vibe?: string;
   status_quote?: string;
   interests?: string[];

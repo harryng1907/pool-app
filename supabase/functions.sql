@@ -18,11 +18,13 @@ begin
      or not (new.email ilike '%@unsw.edu.au' or new.email ilike '%.unsw.edu.au' or new.email ilike '%@pool.demo')) then
     raise exception 'Pool is only open to UNSW students (use your UNSW email).';
   end if;
-  insert into profiles (id, display_name, initials, avatar_color)
+  insert into profiles (id, display_name, initials, avatar_color, real_only)
   values (new.id,
           coalesce(nullif(new.raw_user_meta_data->>'name', ''), initcap(v_local)),
           upper(left(coalesce(nullif(new.raw_user_meta_data->>'name', ''), v_local), 2)),
-          ('{#0E5B66,#2563EB,#9333EA,#DC2626,#EA580C,#16A34A,#DB2777,#0891B2}'::text[])[1 + abs(hashtext(new.id::text)) % 8])
+          ('{#0E5B66,#2563EB,#9333EA,#DC2626,#EA580C,#16A34A,#DB2777,#0891B2}'::text[])[1 + abs(hashtext(new.id::text)) % 8],
+          -- Real UNSW accounts only ever match real people; demo + guest accounts get the simulated students.
+          not coalesce(new.is_anonymous, false) and new.email not ilike '%@pool.demo')
   on conflict (id) do nothing;
   return new;
 end $$;
@@ -96,11 +98,12 @@ begin
            -- happening in the next couple of days → a little higher
            + (case when a.starts_at < now() + interval '2 days' then 0.5 else 0 end) as rank
       from activities a
-      cross join (select coalesce(interests, '{}') as interests from profiles where id = v_me) me
+      cross join (select coalesce(interests, '{}') as interests, real_only from profiles where id = v_me) me
       left join venues v on v.id = a.venue_id
       cross join lateral (
         select count(*) as n from swipes s
         where s.activity_id = a.id and s.decision = 'in' and s.user_id <> v_me
+          and not (me.real_only and (select is_seed from profiles where id = s.user_id))
       ) ic
       where not exists (select 1 from swipes s where s.activity_id = a.id and s.user_id = v_me)
       order by rank desc, a.starts_at nulls last, a.id
@@ -158,6 +161,7 @@ declare
   v_avoided     text;
   v_squad       uuid;
   v_reasons     text[] := '{}';
+  v_required    uuid;  -- the student who suggested this activity always gets a spot
   v_from        timestamptz := now() + interval '2 hours';
   r             record;
 begin
@@ -216,6 +220,20 @@ begin
     delete from _cand where not (id = any(p_preferred));
   else
     delete from _cand where score < 5;
+  end if;
+
+  -- Real people only: if I asked for it, or a real-only person is a candidate, drop the simulated students.
+  if me.real_only or exists (select 1 from _cand c join profiles p on p.id = c.id where p.real_only) then
+    delete from _cand where is_seed;
+  end if;
+
+  -- A student-suggested activity always includes the person who suggested it.
+  if a.created_by is not null and a.created_by <> v_me then
+    select id into v_required from _cand where id = a.created_by;
+    update _cand set score = score + 20 where id = v_required;
+  end if;
+
+  if not v_has_pref then
     delete from _cand where id not in (select id from _cand order by score desc limit 8);
   end if;
 
@@ -238,6 +256,7 @@ begin
       order by 1
     loop
       continue when not pool_is_free(v_me, v_slot, a.duration_mins);
+      continue when v_required is not null and not pool_is_free(v_required, v_slot, a.duration_mins);
       select count(*) into v_count from _cand c where pool_is_free(c.id, v_slot, a.duration_mins);
       continue when v_has_pref and v_count < v_pool_size;  -- rebook: everyone you asked for must be free
       if v_count > v_best_count then
@@ -574,7 +593,7 @@ begin
     select jsonb_build_object(
       'id', p.id, 'name', p.display_name, 'full_name', p.full_name, 'initials', p.initials,
       'avatar_color', p.avatar_color, 'degree', p.degree, 'degree_short', p.degree_short,
-      'year', p.year, 'vibe', p.vibe, 'status_quote', p.status_quote, 'group_pref', p.group_pref,
+      'year', p.year, 'vibe', p.vibe, 'status_quote', p.status_quote, 'group_pref', p.group_pref, 'real_only', p.real_only,
       'interests', to_jsonb(p.interests),
       'onboarded', p.onboarded_at is not null,
       'email', (select coalesce(email, '') from auth.users where id = v_me),
@@ -689,6 +708,7 @@ begin
     degree_short = coalesce(nullif(p->>'degree_short', ''), degree_short),
     year         = coalesce((p->>'year')::smallint, year),
     group_pref   = coalesce(nullif(p->>'group_pref', ''), group_pref),
+    real_only    = coalesce((p->>'real_only')::boolean, real_only),
     vibe         = case when p ? 'vibe' then nullif(trim(p->>'vibe'), '') else vibe end,
     status_quote = case when p ? 'status_quote' then nullif(trim(p->>'status_quote'), '') else status_quote end,
     interests    = case when p ? 'interests' then array(select jsonb_array_elements_text(p->'interests')) else interests end,

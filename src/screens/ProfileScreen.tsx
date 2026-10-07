@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Image,
+  Switch,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +23,7 @@ interface ProfileScreenProps {
   onEditProfile: () => void;
   connections: Connection[];
   onInvite: (c: Connection) => void;
+  onToggleRealOnly: (value: boolean) => void;
   onSignOut: () => void;
 }
 
@@ -38,6 +40,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onEditProfile,
   connections,
   onInvite,
+  onToggleRealOnly,
   onSignOut,
 }) => {
   if (!me) {
@@ -93,6 +96,35 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <Text style={styles.statNumber}>{me.stats.hours} hrs</Text>
             <Text style={styles.statLabel}>Together</Text>
           </View>
+        </View>
+      </View>
+
+      {/* Who can end up in your squads */}
+      <View style={styles.card}>
+        <View style={styles.toggleRow}>
+          <View style={[styles.prefIconBox, me.real_only && { backgroundColor: THEME.colors.successGreenLight }]}>
+            <Ionicons
+              name={me.real_only ? 'people' : 'hardware-chip-outline'}
+              size={18}
+              color={me.real_only ? THEME.colors.successGreen : THEME.colors.deepTeal}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.toggleTitle}>Real people only</Text>
+            <Text style={styles.toggleSub}>
+              {me.real_only
+                ? 'Only real students join your squads. Test with friends!'
+                : '30 simulated students fill squads instantly (demo mode).'}
+            </Text>
+          </View>
+          <Switch
+            value={me.real_only}
+            onValueChange={onToggleRealOnly}
+            disabled={busy}
+            trackColor={{ false: '#D1D5DB', true: THEME.colors.successGreen }}
+            thumbColor="#FFFFFF"
+            accessibilityLabel="Real people only"
+          />
         </View>
       </View>
 
@@ -628,5 +660,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  toggleTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: THEME.colors.textPrimary,
+  },
+  toggleSub: {
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+    marginTop: 2,
+    lineHeight: 16,
   },
 });

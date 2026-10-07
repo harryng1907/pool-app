@@ -350,6 +350,12 @@ function MainApp({ session }: { session: Session }) {
         onEditProfile={() => setEditingProfile(true)}
         connections={connections}
         onInvite={handleInvite}
+        onToggleRealOnly={(value) =>
+          withBusy(async () => {
+            setMe(await api.saveProfile({ real_only: value }));
+            setCards(await api.getDeck());
+          })
+        }
         onSignOut={() => api.signOut()}
       />
     );
