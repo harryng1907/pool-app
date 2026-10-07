@@ -137,10 +137,12 @@ end $$;
 --   Then picks a time everyone is free and a public venue nobody rated badly.
 -- ---------------------------------------------------------------------
 
+drop function if exists public.form_squad(text, uuid[], uuid);
 create or replace function public.form_squad(
   p_activity text,
   p_preferred uuid[] default '{}',
-  p_rebook_of uuid default null
+  p_rebook_of uuid default null,
+  p_at timestamptz default null  -- exact time already agreed (from plan options)
 ) returns uuid language plpgsql security definer set search_path = public as $$
 declare
   v_me          uuid := auth.uid();
@@ -193,6 +195,9 @@ begin
   eligible as (
     select p.* from profiles p
     where p.id <> v_me
+      -- Two separate worlds: real-only people match each other; everyone else (demo, guests,
+      -- simulated students) matches each other. Judges never get paired with real students.
+      and p.real_only = me.real_only
       and (p.id = any(p_preferred) or case me.group_pref
             when 'one'   then p.group_pref in ('one','any')
             when 'small' then p.group_pref in ('small','any')
@@ -222,8 +227,8 @@ begin
     delete from _cand where score < 5;
   end if;
 
-  -- Real people only: if I asked for it, or a real-only person is a candidate, drop the simulated students.
-  if me.real_only or exists (select 1 from _cand c join profiles p on p.id = c.id where p.real_only) then
+  -- Real people only: never simulated students.
+  if me.real_only then
     delete from _cand where is_seed;
   end if;
 
@@ -243,7 +248,9 @@ begin
       into v_from from squads where id = p_rebook_of;
   end if;
 
-  if v_fixed_time then
+  if p_at is not null and p_at > now() then
+    v_best_slot := p_at;
+  elsif v_fixed_time then
     v_best_slot := a.starts_at;
   else
     select count(*) into v_pool_size from _cand;
@@ -407,10 +414,10 @@ begin
   where status = 'confirmed' and ends_at < now()
     and id in (select squad_id from squad_members where user_id = v_me);
 
-  -- Nobody waits forever: 2 hours before the start, anyone who hasn't answered is dropped.
+  -- Nobody waits forever: at the answer-by time, anyone who hasn't answered is dropped.
   perform pool_settle_squad(s.id, true)
   from squads s
-  where s.status = 'proposed' and s.starts_at < now() + interval '2 hours'
+  where s.status = 'proposed' and pool_respond_by(s.id) < now()
     and s.id in (select squad_id from squad_members where user_id = v_me);
 
   return coalesce((
@@ -419,7 +426,7 @@ begin
       select case s.status when 'proposed' then 0 when 'confirmed' then 1 else 2 end as rk,
              s.starts_at,
              jsonb_build_object(
-               'id', s.id, 'status', s.status, 'my_status', mm.status, 'my_go_ahead', mm.go_ahead,
+               'id', s.id, 'status', s.status, 'my_status', mm.status, 'my_go_ahead', mm.go_ahead, 'respond_by', pool_respond_by(s.id),
                'starts_at', s.starts_at, 'ends_at', s.ends_at,
                'reasons', s.reasons, 'rebook_of', s.rebook_of,
                'revealed', s.status in ('confirmed','completed'),
@@ -551,6 +558,7 @@ begin
                'venue_name', v.name,
                'venue_score', (select score from venue_ratings vr where vr.squad_id = s.id and vr.rater_id = v_me),
                'names', jsonb_agg(p.display_name order by r.score desc),
+               'user_ids', jsonb_agg(p.id order by r.score desc),
                'top_score', max(r.score)) as n
       from squads s
       join member_ratings r on r.squad_id = s.id and r.rater_id = v_me and r.score >= 4
@@ -691,6 +699,9 @@ begin
   delete from reports where reporter_id = v_me;
   delete from activities where created_by = v_me;
   delete from member_ratings where ratee_id = v_me;
+  -- Demo accounts always go back to demo mode (simulated students on).
+  update profiles set real_only = false
+  where id = v_me and (select email from auth.users where id = v_me) ilike '%@pool.demo';
 end $$;
 
 -- Onboarding / edit profile. Every key is optional; only keys present are changed.
@@ -990,4 +1001,150 @@ begin
     raise exception 'You need at least one other person who said yes';
   end if;
   return pool_settle_squad(p_squad, false);
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Answer-by deadline for a proposed squad:
+--   normally 2 hours before the start; if the squad was formed late, everyone
+--   still gets at least an hour — but it's always at least 30 min before the start.
+-- ---------------------------------------------------------------------
+create or replace function public.pool_respond_by(p_squad uuid)
+returns timestamptz language sql stable security definer set search_path = public as $$
+  select least(s.starts_at - interval '30 minutes',
+               greatest(s.created_at + interval '1 hour', s.starts_at - interval '2 hours'))
+  from squads s where s.id = p_squad;
+$$;
+
+-- ---------------------------------------------------------------------
+-- Plan something again with people you met: several options, not just one.
+-- ---------------------------------------------------------------------
+
+-- You can only plan with people you've done a session with AND rated 4★+.
+create or replace function public.pool_check_people(p_users uuid[])
+returns void language plpgsql stable security definer set search_path = public as $$
+declare
+  v_me uuid := auth.uid();
+  u uuid;
+begin
+  if coalesce(array_length(p_users, 1), 0) = 0 then raise exception 'Pick someone to plan with'; end if;
+  foreach u in array p_users loop
+    if not exists (
+      select 1 from squads s
+      join squad_members a on a.squad_id = s.id and a.user_id = v_me and a.status = 'accepted'
+      join squad_members b on b.squad_id = s.id and b.user_id = u and b.status = 'accepted'
+      where s.status = 'completed'
+    ) or coalesce((select avg(score) from member_ratings where rater_id = v_me and ratee_id = u), 0) < 4
+      or exists (select 1 from reports r where (r.reporter_id = v_me and r.reported_id = u)
+                                            or (r.reporter_id = u and r.reported_id = v_me)) then
+      raise exception 'You can only plan with people you''ve met and rated 4★+';
+    end if;
+  end loop;
+end $$;
+revoke all on function public.pool_check_people(uuid[]) from public, anon;
+
+-- Earliest start (8am–8pm, next 7 days from p_from) when everyone is free for p_mins.
+drop function if exists public.pool_common_slot(uuid[], int, timestamptz);
+create or replace function public.pool_common_slot(p_users uuid[], p_mins int, p_from timestamptz, p_avoid_days date[] default '{}')
+returns timestamptz language plpgsql stable security definer set search_path = public as $$
+declare
+  v_slot timestamptz;
+begin
+  for v_slot in
+    select (d::date + make_time(h, 0, 0)) at time zone 'Australia/Sydney'
+    from generate_series((p_from at time zone 'Australia/Sydney')::date,
+                         (p_from at time zone 'Australia/Sydney')::date + 7, interval '1 day') d,
+         generate_series(8, 20) h
+    where ((d::date + make_time(h, 0, 0)) at time zone 'Australia/Sydney') >= p_from
+      and not (d::date = any(p_avoid_days))
+    order by 1
+  loop
+    if not exists (select 1 from unnest(p_users) u where not pool_is_free(u, v_slot, p_mins)) then
+      return v_slot;
+    end if;
+  end loop;
+  return null;
+end $$;
+revoke all on function public.pool_common_slot(uuid[], int, timestamptz, date[]) from public, anon, authenticated;
+
+-- Up to 4 options, each with a time everyone is free: "same again" first, then things
+-- you've all said yes to or that match hobbies you share — one per category for variety.
+create or replace function public.suggest_with(p_users uuid[], p_rebook_of uuid default null)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_me     uuid := auth.uid();
+  v_all    uuid[];
+  v_from   timestamptz := now() + interval '2 hours';
+  v_last   text;
+  v_shared text[];
+  v_used   text[] := '{}';
+  v_days   date[] := '{}';
+  v_out    jsonb := '[]'::jsonb;
+  v_slot   timestamptz;
+  r        record;
+begin
+  perform pool_check_people(p_users);
+  v_all := p_users || v_me;
+
+  if p_rebook_of is not null and is_squad_member(p_rebook_of) then
+    select activity_id, greatest(v_from, ((starts_at at time zone 'Australia/Sydney')::date + 1)::timestamp at time zone 'Australia/Sydney')
+      into v_last, v_from from squads where id = p_rebook_of;
+  end if;
+
+  -- Hobbies everyone in the group shares.
+  select array(
+    select t from unnest((select interests from profiles where id = v_me)) t
+    where (select count(*) from profiles where id = any(p_users) and t = any(interests)) = array_length(p_users, 1)
+  ) into v_shared;
+
+  for r in
+    select a.*,
+           (case when a.id = v_last then 1000 else 0 end)
+         + 3 * (select count(*) from swipes s where s.activity_id = a.id and s.decision = 'in' and s.user_id = any(v_all))
+         + 2 * cardinality(array(select unnest(a.tags) intersect select unnest(v_shared)))
+         + (case when a.host is not null then 1 else 0 end) as score,
+           (select count(*) from swipes s where s.activity_id = a.id and s.decision = 'in' and s.user_id = any(v_all)) as yes_count,
+           (select t from unnest(a.tags) t where t = any(v_shared) limit 1) as shared_tag,
+           (select p.display_name from swipes s join profiles p on p.id = s.user_id
+             where s.activity_id = a.id and s.decision = 'in' and s.user_id = any(p_users) limit 1) as yes_name
+    from activities a
+    where not exists (select 1 from swipes s where s.activity_id = a.id and s.decision = 'pass' and s.user_id = any(v_all))
+      and (a.created_by is null or a.created_by = any(v_all))
+      and (a.kind = 'interest' or a.starts_at > v_from or a.id = v_last)
+    order by score desc, a.id
+    limit 25
+  loop
+    continue when r.id <> coalesce(v_last, '') and r.category = any(v_used);
+    if r.kind = 'session' and r.id <> coalesce(v_last, '') then
+      v_slot := case when not exists (select 1 from unnest(v_all) u where not pool_is_free(u, r.starts_at, r.duration_mins))
+                     then r.starts_at end;
+    else
+      -- Prefer a day no other option uses, so the choices aren't all at the same time.
+      v_slot := coalesce(pool_common_slot(v_all, r.duration_mins, v_from, v_days),
+                         pool_common_slot(v_all, r.duration_mins, v_from));
+    end if;
+    continue when v_slot is null;
+
+    v_used := v_used || r.category;
+    v_days := v_days || (v_slot at time zone 'Australia/Sydney')::date;
+    v_out := v_out || jsonb_build_object(
+      'activity_id', r.id, 'title', r.title, 'icon', r.icon, 'category', r.category,
+      'squad_type', r.squad_type, 'host', r.host, 'duration_mins', r.duration_mins,
+      'starts_at', v_slot,
+      'reason', case
+        when r.id = v_last then 'Same as last time'
+        when r.yes_count >= array_length(v_all, 1) then 'You all said "I''m in" to this'
+        when r.yes_name is not null then format('%s said "I''m in" to this', r.yes_name)
+        when r.shared_tag is not null then format('You''re all into %s', r.shared_tag)
+        else 'Something new to try together' end);
+    exit when jsonb_array_length(v_out) >= 4;
+  end loop;
+  return v_out;
+end $$;
+
+-- Book the option you picked.
+create or replace function public.plan_with(p_activity text, p_users uuid[], p_at timestamptz, p_rebook_of uuid default null)
+returns uuid language plpgsql security definer set search_path = public as $$
+begin
+  perform pool_check_people(p_users);
+  return form_squad(p_activity, p_users, case when is_squad_member(p_rebook_of) then p_rebook_of end, p_at);
 end $$;

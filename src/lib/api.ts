@@ -1,7 +1,7 @@
 // Every call the app makes to the backend lives here.
 // Business logic (matching, privacy, scheduling) runs in Postgres — see supabase/schema.sql.
 import { supabase } from './supabase';
-import { ActivityCard, ActivityInput, Connection, Me, Message, Metrics, Nudge, ProfileInput, Squad } from '../types';
+import { ActivityCard, ActivityInput, Connection, Me, Message, Metrics, Nudge, PlanOption, ProfileInput, Squad } from '../types';
 
 async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.rpc(fn, args);
@@ -110,6 +110,15 @@ export const getNudges = () => rpc<Nudge[]>('get_nudges');
 /** Suggest an activity. Returns the new card id and a squad id if one formed straight away. */
 export const createActivity = (input: ActivityInput) =>
   rpc<{ activity_id: string; squad_id: string | null }>('create_activity', { p: input });
+
+// --- Plan again with people you've met -----------------------------------
+
+export const getPlanOptions = (userIds: string[], rebookOf: string | null) =>
+  rpc<PlanOption[]>('suggest_with', { p_users: userIds, p_rebook_of: rebookOf });
+
+/** Book a picked option. Returns the new squad id (null if the time stopped working). */
+export const planWith = (activityId: string, userIds: string[], at: string, rebookOf: string | null) =>
+  rpc<string | null>('plan_with', { p_activity: activityId, p_users: userIds, p_at: at, p_rebook_of: rebookOf });
 
 // --- Your people --------------------------------------------------------
 

@@ -4,7 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Session } from '@supabase/supabase-js';
 import { THEME } from './src/theme';
-import { ActivityCard, ActivityInput, Connection, Me, Nudge, ScreenType, Squad, TabType } from './src/types';
+import { ActivityCard, ActivityInput, Connection, Me, Nudge, PlanOption, PlanTarget, ScreenType, Squad, TabType } from './src/types';
 import { supabase } from './src/lib/supabase';
 import * as api from './src/lib/api';
 import { Header } from './src/components/Header';
@@ -21,6 +21,7 @@ import { LoginScreen } from './src/screens/LoginScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { ChatScreen } from './src/screens/ChatScreen';
 import { SuggestScreen } from './src/screens/SuggestScreen';
+import { PlanScreen } from './src/screens/PlanScreen';
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong');
 
@@ -46,6 +47,7 @@ function MainApp({ session }: { session: Session }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
   const [connections, setConnections] = useState<Connection[]>([]);
+  const [planTarget, setPlanTarget] = useState<PlanTarget | null>(null);
 
   const loadSquads = useCallback(async () => {
     const [s, n, c] = await Promise.all([api.getMySquads(), api.getNudges(), api.getConnections()]);
@@ -127,26 +129,14 @@ function MainApp({ session }: { session: Session }) {
     }
   };
 
-  const handleRebook = async (nudge: Nudge) => {
-    setBusy(true);
-    setMatchingTags(['Rated ' + nudge.top_score + '★', ...nudge.names].slice(0, 3));
-    setMatching(true);
-    setNotice(null);
-    try {
-      const squadId = await atLeast(api.rebook(nudge.squad_id), 1400);
-      await loadSquads();
-      if (squadId) {
-        go('squads', 'squad', squadId);
-      } else {
-        setNotice(`Couldn't find a time this week when you and ${nudge.names.join(' & ')} are all free.`);
-      }
-    } catch (e) {
-      setNotice(errorText(e));
-    } finally {
-      setMatching(false);
-      setBusy(false);
-    }
+  // "Go again?" and "Invite" open a few options instead of repeating the same thing.
+  const openPlan = (target: PlanTarget, from: TabType) => {
+    setPlanTarget(target);
+    go(from, 'plan');
   };
+
+  const handleRebook = (nudge: Nudge) =>
+    openPlan({ userIds: nudge.user_ids, names: nudge.names, rebookOf: nudge.squad_id }, 'discover');
 
   // Runs the matcher behind the AI overlay, then opens the new squad (or explains why not).
   const matchThen = async (tags: string[], run: () => Promise<string | null>, noMatch: string) => {
@@ -171,10 +161,14 @@ function MainApp({ session }: { session: Session }) {
   };
 
   const handleInvite = (c: Connection) =>
+    openPlan({ userIds: [c.id], names: [c.name], rebookOf: c.last_squad_id }, 'profile');
+
+  const handlePick = (o: PlanOption) =>
+    planTarget &&
     matchThen(
-      ['You + ' + c.name, ...c.shared_interests],
-      () => api.inviteConnection(c.id),
-      `Couldn't find a time this week when you and ${c.name} are both free.`,
+      [o.title, ...planTarget.names],
+      () => api.planWith(o.activity_id, planTarget.userIds, o.starts_at, planTarget.rebookOf),
+      `That time just stopped working for someone — try another option.`,
     );
 
   const handleSuggest = (input: ActivityInput) =>
@@ -271,13 +265,15 @@ function MainApp({ session }: { session: Session }) {
     : screen === 'rate' ? 'Rate'
     : screen === 'chat' ? 'Squad chat'
     : screen === 'suggest' ? 'Suggest'
+    : screen === 'plan' ? 'Plan'
     : screen === 'squad' && openSquadData?.status !== 'proposed' ? 'Session'
     : 'Squads';
 
-  const showBack = ['squad', 'rate', 'metrics', 'chat', 'suggest'].includes(screen);
+  const showBack = ['squad', 'rate', 'metrics', 'chat', 'suggest', 'plan'].includes(screen);
   const back = () =>
     screen === 'metrics' ? go('profile', 'profile')
     : screen === 'suggest' ? go('discover', 'discover')
+    : screen === 'plan' ? go(activeTab, activeTab === 'profile' ? 'profile' : 'discover')
     : screen === 'chat' ? go('squads', 'squad', openSquadId)
     : go('squads', 'squads');
 
@@ -333,6 +329,8 @@ function MainApp({ session }: { session: Session }) {
           onReport={(userId, reason) => withBusy(() => api.reportMember(openSquadData.id, userId, reason))}
         />
       );
+  } else if (screen === 'plan' && planTarget) {
+    body = <PlanScreen target={planTarget} busy={busy} onPick={handlePick} />;
   } else if (screen === 'suggest') {
     body = <SuggestScreen busy={busy} onSubmit={handleSuggest} />;
   } else if (screen === 'chat' && openSquadData) {

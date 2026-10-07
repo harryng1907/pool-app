@@ -37,6 +37,14 @@ export const SquadsScreen: React.FC<SquadsScreenProps> = ({
   const agreed = accepted.filter((m) => m.go_ahead).length;
   const canGoAhead = iAccepted && waitingOn > 0 && accepted.length >= 2;
 
+  // Answer-by deadline (adapts to how soon the session is).
+  const msLeft = new Date(squad.respond_by).getTime() - Date.now();
+  const hoursLeft = Math.floor(msLeft / 3600000);
+  const timeLeft =
+    msLeft <= 0 ? 'now' : hoursLeft >= 24 ? `${Math.floor(hoursLeft / 24)}d left` : hoursLeft >= 1 ? `${hoursLeft}h left` : `${Math.max(1, Math.round(msLeft / 60000))} min left`;
+  const urgent = msLeft < 3 * 3600000;
+  const deadline = formatWhen(squad.respond_by).split(' ').slice(1).join(' ');
+
   return (
     <ScrollView
       style={styles.container}
@@ -153,13 +161,20 @@ export const SquadsScreen: React.FC<SquadsScreenProps> = ({
         </View>
       </View>
 
+      <View style={[styles.deadline, urgent && styles.deadlineUrgent]}>
+        <Ionicons name="alarm" size={18} color={urgent ? '#B91C1C' : THEME.colors.deepTeal} />
+        <Text style={[styles.deadlineText, urgent && { color: '#B91C1C' }]}>
+          Answer by {formatDate(squad.respond_by)}, {deadline} · {timeLeft}
+        </Text>
+      </View>
+
       <View style={styles.ctaContainer}>
         {iAccepted ? (
           <>
             <View style={styles.waitingBox}>
               <ActivityIndicator color={THEME.colors.deepTeal} />
               <Text style={styles.waitingText}>
-                You're in. We'll reveal everyone when the last {waitingOn === 1 ? 'person accepts' : `${waitingOn} accept`}.
+                You're in! Waiting on {waitingOn}. If they haven't answered by {deadline}, the {accepted.length >= 2 ? `${accepted.length} of you go ahead` : 'squad is called off'} without them.
               </Text>
             </View>
 
@@ -186,9 +201,6 @@ export const SquadsScreen: React.FC<SquadsScreenProps> = ({
                   </View>
                 </TouchableOpacity>
               ))}
-            <Text style={styles.timeoutNote}>
-              Anyone who hasn't answered 2 hours before is dropped automatically.
-            </Text>
           </>
         ) : (
           <>
@@ -579,5 +591,24 @@ const styles = StyleSheet.create({
     color: THEME.colors.textMuted,
     textAlign: 'center',
     marginTop: 8,
+  },
+  deadline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: THEME.colors.deepTealLight,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 14,
+  },
+  deadlineUrgent: {
+    backgroundColor: '#FEF2F2',
+  },
+  deadlineText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: THEME.colors.deepTealDark,
   },
 });

@@ -1,6 +1,6 @@
 export type TabType = 'discover' | 'squads' | 'profile';
 
-export type ScreenType = 'discover' | 'squads' | 'squad' | 'rate' | 'chat' | 'profile' | 'metrics' | 'suggest';
+export type ScreenType = 'discover' | 'squads' | 'squad' | 'rate' | 'chat' | 'profile' | 'metrics' | 'suggest' | 'plan';
 
 export type SquadType = 'deadline' | 'hobby' | 'career';
 export type Category = 'quiet' | 'social' | 'active' | 'maker' | 'food';
@@ -55,6 +55,7 @@ export interface Squad {
   status: SquadStatus;
   my_status: 'invited' | 'accepted' | 'declined';
   my_go_ahead: boolean;
+  respond_by: string; // proposed squads: answer by then, or the squad goes ahead without you
   starts_at: string;
   ends_at: string;
   reasons: string[];
@@ -80,6 +81,7 @@ export interface Squad {
 // From get_nudges
 export interface Nudge {
   squad_id: string;
+  user_ids: string[];
   activity_title: string;
   activity_icon: string;
   venue_name: string | null;
@@ -174,4 +176,24 @@ export interface ActivityInput {
   description?: string;
   duration_mins: number;
   tags: string[];
+}
+
+// From suggest_with — options when planning again with people you've met
+export interface PlanOption {
+  activity_id: string;
+  title: string;
+  icon: string;
+  category: Category;
+  squad_type: SquadType;
+  host: string | null;
+  duration_mins: number;
+  starts_at: string;
+  reason: string;
+}
+
+// Who you're planning with
+export interface PlanTarget {
+  userIds: string[];
+  names: string[];
+  rebookOf: string | null;
 }
