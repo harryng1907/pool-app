@@ -27,13 +27,12 @@ const UNSW_EMAIL = /@([a-z0-9-]+\.)*unsw\.edu\.au$/i;
 export const isUnswEmail = (email: string) => UNSW_EMAIL.test(email.trim());
 
 /** Create an account. Returns true if signed in straight away, false if a confirmation email was sent. */
-export async function signUp(email: string, password: string, name: string): Promise<boolean> {
+export async function signUp(email: string, password: string): Promise<boolean> {
   if (!isUnswEmail(email)) throw new Error('Use your UNSW email (e.g. z1234567@ad.unsw.edu.au)');
   const { data, error } = await supabase.auth.signUp({
     email: email.trim(),
     password,
     options: {
-      data: { name: name.trim() },
       emailRedirectTo: typeof window !== 'undefined' && window.location ? window.location.origin : undefined,
     },
   });
@@ -54,6 +53,13 @@ export async function signInGuest() {
       /anonymous/i.test(error.message) ? 'Guest mode is switched off right now. Try a demo student below.' : error.message,
     );
   }
+}
+
+/** Permanently deletes the signed-in account and everything attached to it. */
+export async function deleteAccount() {
+  const { error } = await supabase.rpc('delete_my_account');
+  if (error) throw new Error(error.message);
+  await supabase.auth.signOut();
 }
 
 export async function signOut() {

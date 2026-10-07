@@ -21,20 +21,19 @@ export const LoginScreen: React.FC = () => {
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>('join');
-  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [checkInbox, setCheckInbox] = useState(false);
 
   const canSubmit =
-    isUnswEmail(email) && password.length >= 8 && (mode === 'login' || name.trim().length >= 2);
+    isUnswEmail(email) && password.length >= 8;
 
   const submit = async () => {
     setPending('form');
     setError(null);
     try {
       if (mode === 'join') {
-        const signedIn = await signUp(email, password, name);
+        const signedIn = await signUp(email, password);
         if (!signedIn) setCheckInbox(true);
       } else {
         await signIn(email, password);
@@ -130,19 +129,6 @@ export const LoginScreen: React.FC = () => {
             ))}
           </View>
 
-          {mode === 'join' && (
-            <View style={styles.inputRow}>
-              <Ionicons name="person-outline" size={18} color={THEME.colors.textMuted} />
-              <TextInput
-                style={styles.input}
-                placeholder="First name"
-                placeholderTextColor={THEME.colors.textMuted}
-                value={name}
-                onChangeText={setName}
-                autoCapitalize="words"
-              />
-            </View>
-          )}
 
           <View style={styles.inputRow}>
             <Ionicons name="mail-outline" size={18} color={THEME.colors.textMuted} />

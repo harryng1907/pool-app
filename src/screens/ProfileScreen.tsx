@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -24,6 +24,7 @@ interface ProfileScreenProps {
   connections: Connection[];
   onInvite: (c: Connection) => void;
   onToggleRealOnly: (value: boolean) => void;
+  onDeleteAccount: () => void;
   onSignOut: () => void;
 }
 
@@ -32,6 +33,35 @@ const hour = (h: number) => (h === 12 ? '12pm' : h > 12 ? `${h - 12}pm` : `${h}a
 const GROUP_PREF = { one: 'Just one person', small: 'A small group (3–4)', any: 'Either is fine' };
 
 // Only you can see this page. Squad-mates see your name, degree and status line after a squad confirms.
+const DeleteAccount: React.FC<{ busy: boolean; onConfirm: () => void }> = ({ busy, onConfirm }) => {
+  const [armed, setArmed] = useState(false);
+  return (
+    <View style={styles.dangerBox}>
+      {armed ? (
+        <>
+          <Text style={styles.dangerText}>
+            This permanently deletes your profile, squads, ratings and chats. It can't be undone.
+          </Text>
+          <View style={styles.dangerRow}>
+            <TouchableOpacity style={styles.cancelBtn} onPress={() => setArmed(false)} disabled={busy}>
+              <Text style={styles.cancelText}>Keep it</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.deleteBtn} onPress={onConfirm} disabled={busy}>
+              <Ionicons name="trash" size={16} color="#FFFFFF" />
+              <Text style={styles.deleteText}>Delete forever</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      ) : (
+        <TouchableOpacity style={styles.deleteLink} onPress={() => setArmed(true)} accessibilityLabel="Delete account">
+          <Ionicons name="trash-outline" size={16} color="#DC2626" />
+          <Text style={styles.deleteLinkText}>Delete my account</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+};
+
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   me,
   busy,
@@ -41,6 +71,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   connections,
   onInvite,
   onToggleRealOnly,
+  onDeleteAccount,
   onSignOut,
 }) => {
   if (!me) {
@@ -299,6 +330,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </TouchableOpacity>
         )}
       </View>
+      {!isDemo || me.is_guest ? <DeleteAccount busy={busy} onConfirm={onDeleteAccount} /> : null}
     </ScrollView>
   );
 };
@@ -676,5 +708,60 @@ const styles = StyleSheet.create({
     color: THEME.colors.textSecondary,
     marginTop: 2,
     lineHeight: 16,
+  },
+  dangerBox: {
+    marginTop: 4,
+    marginBottom: 24,
+  },
+  deleteLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+  },
+  deleteLinkText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  dangerText: {
+    fontSize: 13,
+    color: '#991B1B',
+    textAlign: 'center',
+    lineHeight: 19,
+    marginBottom: 12,
+  },
+  dangerRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  cancelBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: THEME.radii.pill,
+    backgroundColor: THEME.colors.grayButton,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: THEME.colors.grayButtonText,
+  },
+  deleteBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: THEME.radii.pill,
+    backgroundColor: '#DC2626',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  deleteText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 });

@@ -912,3 +912,25 @@ begin
   v_squad := form_squad(v_id);
   return jsonb_build_object('activity_id', v_id, 'squad_id', v_squad);
 end $$;
+
+-- Permanently delete my account. Cascades to profile, swipes, squads I'm in, ratings,
+-- chat messages, reports and suggested activities. Demo accounts can't be deleted.
+create or replace function public.delete_my_account()
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_me uuid := auth.uid();
+begin
+  if v_me is null then raise exception 'not signed in'; end if;
+  if (select email from auth.users where id = v_me) ilike '%@pool.demo' then
+    raise exception 'Demo accounts can''t be deleted — use Reset instead';
+  end if;
+  -- Squads that would be left with one person (or only simulated students) are cancelled.
+  update squads s set status = 'cancelled'
+  where s.status in ('proposed','confirmed')
+    and s.id in (select squad_id from squad_members where user_id = v_me)
+    and ((select count(*) from squad_members m where m.squad_id = s.id and m.user_id <> v_me and m.status <> 'declined') < 2
+         -- or only simulated students would be left
+         or not exists (select 1 from squad_members m join profiles p on p.id = m.user_id
+                        where m.squad_id = s.id and m.user_id <> v_me and not p.is_seed));
+  delete from auth.users where id = v_me;
+end $$;

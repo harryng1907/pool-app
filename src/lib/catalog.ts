@@ -33,6 +33,19 @@ export const INTERESTS: { tag: string; label: string; icon: IconName }[] = [
   { tag: 'startups', label: 'Startups', icon: 'bulb' },
   { tag: 'hackathon', label: 'Hackathons', icon: 'rocket' },
   { tag: 'building', label: 'Making things', icon: 'construct' },
+  { tag: 'gaming', label: 'Gaming', icon: 'game-controller' },
+  { tag: 'music', label: 'Music', icon: 'musical-note' },
+  { tag: 'cooking', label: 'Cooking', icon: 'restaurant' },
+  { tag: 'volunteering', label: 'Volunteering', icon: 'heart' },
+];
+
+// Onboarding shows hobbies in these sections.
+export const INTEREST_GROUPS: { label: string; icon: IconName; tags: string[] }[] = [
+  { label: 'Study vibe', icon: 'library', tags: ['quiet focus', 'library', 'lofi', 'night owl', 'problem solving', 'pair programming'] },
+  { label: 'Food & chill', icon: 'cafe', tags: ['boba', 'matcha', 'chill', 'reading', 'cooking'] },
+  { label: 'Social & creative', icon: 'people', tags: ['social', 'board games', 'trivia', 'gaming', 'anime', 'music', 'art', 'photography', 'language'] },
+  { label: 'Active', icon: 'fitness', tags: ['outdoors', 'running', 'gym', 'badminton', 'climbing', 'sport'] },
+  { label: 'Career & building', icon: 'briefcase', tags: ['internships', 'coding interview', 'startups', 'hackathon', 'building', 'volunteering'] },
 ];
 
 export const DEGREES: { label: string; short: string; icon: IconName }[] = [
@@ -50,10 +63,63 @@ export const DEGREES: { label: string; short: string; icon: IconName }[] = [
   { label: 'Something else', short: 'UNSW', icon: 'school' },
 ];
 
-export const COMMON_COURSES = [
-  'COMP1511', 'COMP1521', 'COMP1531', 'COMP2521', 'MATH1081', 'MATH1131', 'MATH1231',
-  'ECON1101', 'ACCT1501', 'DESN1000', 'ENGG1000', 'PSYC1001', 'ARTS1090',
+// Courses grouped by faculty, then by 4-letter subject prefix. Not exhaustive —
+// any valid code (e.g. PHYS1131) can be typed in.
+export const FACULTIES: {
+  key: string;
+  label: string;
+  icon: IconName;
+  subjects: { prefix: string; label: string; courses: string[] }[];
+}[] = [
+  {
+    key: 'eng', label: 'Engineering', icon: 'construct',
+    subjects: [
+      { prefix: 'COMP', label: 'Computing', courses: ['COMP1511', 'COMP1521', 'COMP1531', 'COMP2511', 'COMP2521', 'COMP3311', 'COMP3900'] },
+      { prefix: 'ENGG', label: 'Engineering', courses: ['ENGG1000', 'ENGG1300', 'ENGG1811'] },
+      { prefix: 'DESN', label: 'Design', courses: ['DESN1000', 'DESN2000'] },
+    ],
+  },
+  {
+    key: 'sci', label: 'Science', icon: 'flask',
+    subjects: [
+      { prefix: 'MATH', label: 'Maths', courses: ['MATH1081', 'MATH1131', 'MATH1141', 'MATH1231', 'MATH1241', 'MATH2089'] },
+      { prefix: 'PHYS', label: 'Physics', courses: ['PHYS1121', 'PHYS1131'] },
+      { prefix: 'CHEM', label: 'Chemistry', courses: ['CHEM1011', 'CHEM1031'] },
+      { prefix: 'BABS', label: 'Biotech', courses: ['BABS1201', 'BABS1202'] },
+      { prefix: 'PSYC', label: 'Psychology', courses: ['PSYC1001', 'PSYC1011'] },
+    ],
+  },
+  {
+    key: 'bus', label: 'Business', icon: 'briefcase',
+    subjects: [
+      { prefix: 'ECON', label: 'Economics', courses: ['ECON1101', 'ECON1102', 'ECON1203'] },
+      { prefix: 'ACCT', label: 'Accounting', courses: ['ACCT1501', 'ACCT1511'] },
+      { prefix: 'FINS', label: 'Finance', courses: ['FINS1612', 'FINS1613'] },
+      { prefix: 'MGMT', label: 'Management', courses: ['MGMT1001'] },
+      { prefix: 'MARK', label: 'Marketing', courses: ['MARK1012'] },
+    ],
+  },
+  {
+    key: 'ada', label: 'Arts & Design', icon: 'color-palette',
+    subjects: [
+      { prefix: 'ARTS', label: 'Arts', courses: ['ARTS1090', 'ARTS1360'] },
+      { prefix: 'MDIA', label: 'Media', courses: ['MDIA1002'] },
+    ],
+  },
+  {
+    key: 'law', label: 'Law', icon: 'document-text',
+    subjects: [{ prefix: 'LAWS', label: 'Law', courses: ['LAWS1052', 'LAWS1061'] }],
+  },
+  {
+    key: 'med', label: 'Medicine & Health', icon: 'medkit',
+    subjects: [
+      { prefix: 'HESC', label: 'Health science', courses: ['HESC1501'] },
+      { prefix: 'PHSL', label: 'Physiology', courses: ['PHSL2101'] },
+    ],
+  },
 ];
+
+export const ALL_COURSES = FACULTIES.flatMap((f) => f.subjects.flatMap((s) => s.courses));
 
 // Free-time blocks (Sydney time). Adjacent picks on the same day are merged into one window.
 export const TIME_BLOCKS: { key: string; label: string; start: number; end: number; icon: IconName }[] = [

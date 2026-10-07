@@ -350,6 +350,7 @@ function MainApp({ session }: { session: Session }) {
         onEditProfile={() => setEditingProfile(true)}
         connections={connections}
         onInvite={handleInvite}
+        onDeleteAccount={() => withBusy(() => api.deleteAccount())}
         onToggleRealOnly={(value) =>
           withBusy(async () => {
             setMe(await api.saveProfile({ real_only: value }));

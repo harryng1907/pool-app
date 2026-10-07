@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { THEME } from '../theme';
 import { Me } from '../types';
 import { saveProfile } from '../lib/api';
-import { COMMON_COURSES, DEGREES, GROUP_PREFS, INTERESTS, TIME_BLOCKS, WEEK } from '../lib/catalog';
+import { ALL_COURSES, DEGREES, FACULTIES, GROUP_PREFS, INTEREST_GROUPS, INTERESTS, TIME_BLOCKS, WEEK } from '../lib/catalog';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -70,16 +70,30 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ me, editing,
   const [interests, setInterests] = useState<Set<string>>(new Set(me.interests));
   const [courses, setCourses] = useState<Set<string>>(new Set(me.courses));
   const [customCourse, setCustomCourse] = useState('');
+  // Start on the faculty that matches their degree, if we can guess it.
+  const [faculty, setFaculty] = useState(() => {
+    const d = me.degree_short;
+    if (['CS', 'SENG', 'ENG', 'MECH', 'MTRN', 'CVEN', 'DS'].includes(d)) return 'eng';
+    if (['COMM', 'ACCT'].includes(d)) return 'bus';
+    if (['LAW'].includes(d)) return 'law';
+    if (['MED', 'EXSC'].includes(d)) return 'med';
+    if (['DESN', 'ARTS', 'MDIA'].includes(d)) return 'ada';
+    if (['SCI', 'PSYC', 'PHYS'].includes(d)) return 'sci';
+    return 'eng';
+  });
   const [cells, setCells] = useState<Set<string>>(() => fromAvailability(me));
   const [groupPref, setGroupPref] = useState(me.group_pref);
   const [vibe, setVibe] = useState(me.vibe ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const allCourses = useMemo(
-    () => [...COMMON_COURSES, ...[...courses].filter((c) => !COMMON_COURSES.includes(c))],
-    [courses],
+  // Typing in the box searches every faculty; otherwise show the selected faculty.
+  const query = customCourse.trim().toUpperCase().replace(/\s+/g, '');
+  const searchHits = useMemo(
+    () => (query.length >= 2 ? ALL_COURSES.filter((c) => c.includes(query)) : []),
+    [query],
   );
+  const canAddTyped = /^[A-Z]{4}\d{4}$/.test(query) && !courses.has(query);
 
   const toggle = <T,>(set: Set<T>, value: T) => {
     const next = new Set(set);
@@ -209,58 +223,70 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ me, editing,
 
         {step === 1 && (
           <>
-            <View style={styles.grid}>
-              {INTERESTS.map((it) => {
-                const on = interests.has(it.tag);
-                return (
-                  <TouchableOpacity
-                    key={it.tag}
-                    style={[styles.tile, styles.tile4, on && styles.tileOn]}
-                    onPress={() => setInterests((x) => toggle(x, it.tag))}
-                    activeOpacity={0.8}
-                    accessibilityLabel={it.label}
-                  >
-                    <Ionicons name={it.icon} size={24} color={on ? '#FFFFFF' : THEME.colors.primaryOrange} />
-                    <Text style={[styles.tileTextSmall, on && styles.tileTextOn]} numberOfLines={1}>
-                      {it.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+            {INTEREST_GROUPS.map((group) => (
+              <View key={group.label} style={styles.group}>
+                <View style={styles.groupHead}>
+                  <Ionicons name={group.icon} size={15} color={THEME.colors.deepTeal} />
+                  <Text style={styles.groupLabel}>{group.label.toUpperCase()}</Text>
+                </View>
+                <View style={styles.grid}>
+                  {group.tags.map((tag) => {
+                    const it = INTERESTS.find((i) => i.tag === tag)!;
+                    const on = interests.has(tag);
+                    return (
+                      <TouchableOpacity
+                        key={tag}
+                        style={[styles.tile, styles.tile4, on && styles.tileOn]}
+                        onPress={() => setInterests((x) => toggle(x, tag))}
+                        activeOpacity={0.8}
+                        accessibilityLabel={it.label}
+                      >
+                        <Ionicons name={it.icon} size={24} color={on ? '#FFFFFF' : THEME.colors.primaryOrange} />
+                        <Text style={[styles.tileTextSmall, on && styles.tileTextOn]} numberOfLines={1}>
+                          {it.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            ))}
             <View style={styles.counter}>
               <Ionicons
                 name={interests.size >= 3 ? 'checkmark-circle' : 'ellipse-outline'}
                 size={16}
                 color={interests.size >= 3 ? THEME.colors.successGreen : THEME.colors.textMuted}
               />
-              <Text style={styles.counterText}>{interests.size} picked</Text>
+              <Text style={styles.counterText}>
+                {interests.size} picked{interests.size < 3 ? ` · ${3 - interests.size} more to go` : ''}
+              </Text>
             </View>
           </>
         )}
 
         {step === 2 && (
           <>
-            <View style={styles.chipsWrap}>
-              {allCourses.map((c) => {
-                const on = courses.has(c);
-                return (
+            {courses.size > 0 && (
+              <View style={styles.picked}>
+                {[...courses].map((c) => (
                   <TouchableOpacity
                     key={c}
-                    style={[styles.courseChip, on && styles.chipOn]}
+                    style={[styles.courseChip, styles.chipOn]}
                     onPress={() => setCourses((x) => toggle(x, c))}
+                    accessibilityLabel={`Remove ${c}`}
                   >
-                    {on && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
-                    <Text style={[styles.courseText, on && styles.chipTextOn]}>{c}</Text>
+                    <Text style={[styles.courseText, styles.chipTextOn]}>{c}</Text>
+                    <Ionicons name="close" size={14} color="#FFFFFF" />
                   </TouchableOpacity>
-                );
-              })}
-            </View>
-            <View style={[styles.inputRow, { marginTop: 16 }]}>
-              <Ionicons name="add-circle-outline" size={18} color={THEME.colors.textMuted} />
+                ))}
+              </View>
+            )}
+
+            <View style={styles.inputRow}>
+              <Ionicons name="search" size={18} color={THEME.colors.textMuted} />
               <TextInput
                 style={styles.input}
-                placeholder="Add another, e.g. PHYS1121"
+                placeholder="Search or add, e.g. COMP15"
                 placeholderTextColor={THEME.colors.textMuted}
                 value={customCourse}
                 onChangeText={setCustomCourse}
@@ -268,10 +294,92 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ me, editing,
                 onSubmitEditing={addCustomCourse}
                 returnKeyType="done"
               />
-              <TouchableOpacity onPress={addCustomCourse} style={styles.addBtn} accessibilityLabel="Add course">
-                <Ionicons name="add" size={18} color="#FFFFFF" />
-              </TouchableOpacity>
+              {canAddTyped && (
+                <TouchableOpacity onPress={addCustomCourse} style={styles.addBtn} accessibilityLabel="Add course">
+                  <Ionicons name="add" size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+              )}
             </View>
+
+            {query.length >= 2 ? (
+              <View style={[styles.chipsWrap, { marginTop: 14 }]}>
+                {searchHits.map((c) => {
+                  const on = courses.has(c);
+                  return (
+                    <TouchableOpacity
+                      key={c}
+                      style={[styles.courseChip, on && styles.chipOn]}
+                      onPress={() => setCourses((x) => toggle(x, c))}
+                    >
+                      {on && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
+                      <Text style={[styles.courseText, on && styles.chipTextOn]}>{c}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+                {searchHits.length === 0 && !canAddTyped && (
+                  <Text style={styles.hint}>No match yet — type the full code, e.g. PHYS1131</Text>
+                )}
+                {canAddTyped && !searchHits.includes(query) && (
+                  <TouchableOpacity style={[styles.courseChip, styles.addChip]} onPress={addCustomCourse}>
+                    <Ionicons name="add" size={14} color={THEME.colors.primaryOrange} />
+                    <Text style={[styles.courseText, { color: THEME.colors.primaryOrange }]}>Add {query}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : (
+              <>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.facultyScroll}
+                  contentContainerStyle={styles.facultyRow}
+                >
+                  {FACULTIES.map((f) => {
+                    const on = faculty === f.key;
+                    const count = f.subjects.reduce((n, s) => n + s.courses.filter((c) => courses.has(c)).length, 0);
+                    return (
+                      <TouchableOpacity
+                        key={f.key}
+                        style={[styles.facultyChip, on && styles.chipOn]}
+                        onPress={() => setFaculty(f.key)}
+                      >
+                        <Ionicons name={f.icon} size={15} color={on ? '#FFFFFF' : THEME.colors.deepTeal} />
+                        <Text style={[styles.facultyText, on && styles.chipTextOn]}>{f.label}</Text>
+                        {count > 0 && (
+                          <View style={[styles.countDot, on && { backgroundColor: '#FFFFFF' }]}>
+                            <Text style={[styles.countDotText, on && { color: THEME.colors.deepTeal }]}>{count}</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+
+                {FACULTIES.find((f) => f.key === faculty)!.subjects.map((subject) => (
+                  <View key={subject.prefix} style={styles.group}>
+                    <View style={styles.groupHead}>
+                      <Text style={styles.prefix}>{subject.prefix}</Text>
+                      <Text style={styles.groupLabel}>{subject.label.toUpperCase()}</Text>
+                    </View>
+                    <View style={styles.chipsWrap}>
+                      {subject.courses.map((c) => {
+                        const on = courses.has(c);
+                        return (
+                          <TouchableOpacity
+                            key={c}
+                            style={[styles.courseChip, on && styles.chipOn]}
+                            onPress={() => setCourses((x) => toggle(x, c))}
+                          >
+                            {on && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
+                            <Text style={[styles.courseText, on && styles.chipTextOn]}>{c}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ))}
+              </>
+            )}
           </>
         )}
 
@@ -493,7 +601,7 @@ const styles = StyleSheet.create({
     width: '31.5%',
   },
   tile4: {
-    width: '23.3%',
+    width: '22.8%',
   },
   tileOn: {
     backgroundColor: THEME.colors.primaryOrange,
@@ -665,5 +773,78 @@ const styles = StyleSheet.create({
   error: {
     color: '#DC2626',
     marginTop: 12,
+  },
+  group: {
+    marginBottom: 16,
+  },
+  groupHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  groupLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: THEME.colors.textMuted,
+    letterSpacing: 0.8,
+  },
+  prefix: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    backgroundColor: THEME.colors.deepTeal,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  picked: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 14,
+  },
+  addChip: {
+    borderColor: '#FED7AA',
+    backgroundColor: THEME.colors.primaryOrangeLight,
+  },
+  facultyScroll: {
+    flexGrow: 0,
+    marginTop: 14,
+    marginBottom: 14,
+  },
+  facultyRow: {
+    gap: 8,
+  },
+  facultyChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: THEME.radii.pill,
+    backgroundColor: THEME.colors.cardWhite,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+  },
+  facultyText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: THEME.colors.deepTeal,
+  },
+  countDot: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: THEME.colors.primaryOrange,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  countDotText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 });
