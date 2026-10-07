@@ -29,6 +29,10 @@ Use this for the National Final deck. **Built** = working in the app today (show
 | Commercialise, show it's executable | **Plan** | Free for students. Revenue from campus partners (cafés and venues pay for footfall from squads), plus a university / Arc licence for wellbeing and retention data (aggregate only). |
 | Measure input (active) and output (monthly) after 2–3 months; must measure churn | **Built (instrumented)** | Events, swipes, squads and ratings are all timestamped, so cohorts and churn are computable from day one of the pilot. |
 
+## AI + attendance (added for the final)
+- **AI that reads what people write:** the matcher scores how similarly people describe themselves in their own words (text similarity), and Claude writes the one-sentence "why you matched" from everyone's own words. Claude only sees anonymous labels (Student A/B), never names or emails. If the AI is unavailable, the rule-based reasons still show.
+- **Real attendance:** "📍 I'm here" check-in opens 30 min before a session. The metrics funnel's "Showed up" step counts check-ins, which directly measures the riskiest assumption (do shy students actually turn up?).
+
 ## Honest limits (say them before a judge does)
 - The demo uses **30 simulated students** with 2 weeks of simulated history. The toggle on the metrics screen says so.
 - **The riskiest assumption is still untested:** that shy students actually turn up. The first pilot measures matched → met up.

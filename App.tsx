@@ -49,12 +49,25 @@ function MainApp({ session }: { session: Session }) {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [planTarget, setPlanTarget] = useState<PlanTarget | null>(null);
 
+  // Ask Claude for a "why you matched" sentence once per squad; the app works fine without it.
+  const aiRequested = useRef(new Set<string>());
+  const fillAiReasons = useCallback((list: Squad[]) => {
+    for (const s of list) {
+      if (s.ai_reason || s.status === 'cancelled' || aiRequested.current.has(s.id)) continue;
+      aiRequested.current.add(s.id);
+      api.requestAiReason(s.id).then((reason) => {
+        if (reason) setSquads((cur) => cur.map((x) => (x.id === s.id ? { ...x, ai_reason: reason } : x)));
+      });
+    }
+  }, []);
+
   const loadSquads = useCallback(async () => {
     const [s, n, c] = await Promise.all([api.getMySquads(), api.getNudges(), api.getConnections()]);
     setSquads(s);
+    fillAiReasons(s);
     setNudges(n);
     setConnections(c);
-  }, []);
+  }, [fillAiReasons]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -326,6 +339,12 @@ function MainApp({ session }: { session: Session }) {
           onRate={() => go('squads', 'rate', openSquadData.id)}
           onBack={back}
           onOpenChat={() => go('squads', 'chat', openSquadData.id)}
+          onCheckIn={() =>
+            withBusy(async () => {
+              await api.checkIn(openSquadData.id);
+              await loadSquads();
+            })
+          }
           onReport={(userId, reason) => withBusy(() => api.reportMember(openSquadData.id, userId, reason))}
         />
       );

@@ -218,6 +218,7 @@ begin
     + (case when (select avg(score) from member_ratings mr where mr.rater_id = v_me and mr.ratee_id = p.id) >= 4 then 6 else 0 end)
     + least(3, cardinality(array(select unnest(p.interests) intersect select unnest(me.interests))))
     + least(2, cardinality(array(select unnest(p.interests) intersect select unnest(a.tags))))
+    + 3 * coalesce(extensions.similarity(lower(p.vibe), lower(me.vibe)), 0)  -- similar "in your words" lines
     + (case when p.year <> me.year then 0.5 else 0 end) as score
   from eligible p;
 
@@ -426,7 +427,8 @@ begin
       select case s.status when 'proposed' then 0 when 'confirmed' then 1 else 2 end as rk,
              s.starts_at,
              jsonb_build_object(
-               'id', s.id, 'status', s.status, 'my_status', mm.status, 'my_go_ahead', mm.go_ahead, 'respond_by', pool_respond_by(s.id),
+               'id', s.id, 'status', s.status, 'my_status', mm.status, 'my_go_ahead', mm.go_ahead, 'respond_by', pool_respond_by(s.id), 'ai_reason', s.ai_reason,
+               'my_checked_in', mm.checked_in_at is not null,
                'starts_at', s.starts_at, 'ends_at', s.ends_at,
                'reasons', s.reasons, 'rebook_of', s.rebook_of,
                'revealed', s.status in ('confirmed','completed'),
@@ -451,13 +453,14 @@ begin
                        'id', p.id, 'name', p.display_name, 'initials', p.initials,
                        'avatar_color', p.avatar_color, 'degree', p.degree, 'degree_short', p.degree_short,
                        'year', p.year, 'status_quote', p.status_quote,
-                       'is_me', m.user_id = v_me, 'status', m.status, 'hidden', false, 'go_ahead', m.go_ahead)
+                       'is_me', m.user_id = v_me, 'status', m.status, 'hidden', false, 'go_ahead', m.go_ahead,
+                       'checked_in', m.checked_in_at is not null)
                    else
                      jsonb_build_object(
                        'id', null, 'name', p.degree_short || ' student', 'initials', '?',
                        'avatar_color', '#B8C2CC', 'degree', p.degree, 'degree_short', p.degree_short,
                        'year', p.year, 'status_quote', null,
-                       'is_me', false, 'status', m.status, 'hidden', true, 'go_ahead', m.go_ahead)
+                       'is_me', false, 'status', m.status, 'hidden', true, 'go_ahead', m.go_ahead, 'checked_in', false)
                    end
                    order by (m.user_id = v_me), m.responded_at nulls last)
                  from squad_members m join profiles p on p.id = m.user_id
@@ -649,8 +652,8 @@ begin
       jsonb_build_object('step', 'Matched',    'users', (select count(distinct user_id) from squad_members where user_id = any(v_users))),
       jsonb_build_object('step', 'Confirmed',  'users', (select count(distinct m.user_id) from squad_members m join squads s on s.id = m.squad_id
                                                           where m.user_id = any(v_users) and m.status = 'accepted' and s.status in ('confirmed','completed'))),
-      jsonb_build_object('step', 'Met up',     'users', (select count(distinct m.user_id) from squad_members m join squads s on s.id = m.squad_id
-                                                          where m.user_id = any(v_users) and m.status = 'accepted' and s.status = 'completed')),
+      jsonb_build_object('step', 'Showed up',  'users', (select count(distinct m.user_id) from squad_members m
+                                                          where m.user_id = any(v_users) and m.checked_in_at is not null)),
       jsonb_build_object('step', 'Rated',      'users', (select count(distinct rater_id) from member_ratings where rater_id = any(v_users))),
       jsonb_build_object('step', 'Rebooked',   'users', (select count(distinct m.user_id) from squad_members m join squads s on s.id = m.squad_id
                                                           where m.user_id = any(v_users) and s.rebook_of is not null and m.status <> 'declined'))
@@ -1147,4 +1150,74 @@ returns uuid language plpgsql security definer set search_path = public as $$
 begin
   perform pool_check_people(p_users);
   return form_squad(p_activity, p_users, case when is_squad_member(p_rebook_of) then p_rebook_of end, p_at);
+end $$;
+
+-- ---------------------------------------------------------------------
+-- AI match reason (used by the match-reason Edge Function)
+-- ---------------------------------------------------------------------
+
+-- What Claude gets to see: anonymous labels, degree, year, hobbies, courses and own words. No names/emails.
+create or replace function public.get_ai_context(p_squad uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  if not is_squad_member(p_squad) then raise exception 'not in this squad'; end if;
+  return (
+    select jsonb_build_object(
+      'ai_reason', s.ai_reason,
+      'activity', jsonb_build_object('title', a.title, 'type', a.squad_type, 'tags', a.tags, 'course', a.course),
+      'when', to_char(s.starts_at at time zone 'Australia/Sydney', 'FMDay FMHH12:MI AM'),
+      'facts', s.reasons,
+      'students', (
+        select jsonb_agg(jsonb_build_object(
+          'label', 'Student ' || chr(64 + rn::int),
+          'degree', p.degree, 'year', p.year,
+          'in_their_words', p.vibe, 'hobbies', p.interests,
+          'courses', (select jsonb_agg(course) from profile_courses pc where pc.user_id = p.id)))
+        from (select m.user_id, row_number() over (order by m.user_id) rn
+              from squad_members m where m.squad_id = s.id and m.status <> 'declined') x
+        join profiles p on p.id = x.user_id))
+    from squads s join activities a on a.id = s.activity_id
+    where s.id = p_squad
+  );
+end $$;
+
+create or replace function public.set_ai_reason(p_squad uuid, p_text text)
+returns text language plpgsql security definer set search_path = public as $$
+declare
+  v text;
+begin
+  if not is_squad_member(p_squad) then raise exception 'not in this squad'; end if;
+  update squads set ai_reason = left(trim(p_text), 240)
+  where id = p_squad and ai_reason is null and length(trim(p_text)) > 0;
+  select ai_reason into v from squads where id = p_squad;
+  return v;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Check-in: "I'm here" at the session = real attendance
+-- ---------------------------------------------------------------------
+create or replace function public.check_in(p_squad uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_me   uuid := auth.uid();
+  v_demo boolean;
+  s      squads%rowtype;
+begin
+  select * into s from squads where id = p_squad;
+  if not exists (select 1 from squad_members where squad_id = p_squad and user_id = v_me and status = 'accepted')
+     or s.status not in ('confirmed', 'completed') then
+    raise exception 'Check-in is for confirmed squads';
+  end if;
+  select (email ilike '%@pool.demo' or coalesce(is_anonymous, false)) into v_demo from auth.users where id = v_me;
+  -- Real accounts: from 30 minutes before the start until it ends. Demo/guest accounts: any time.
+  if not v_demo and not (now() between s.starts_at - interval '30 minutes' and s.ends_at) then
+    raise exception 'Check-in opens 30 minutes before the start';
+  end if;
+
+  update squad_members set checked_in_at = coalesce(checked_in_at, now())
+  where squad_id = p_squad and user_id = v_me;
+  -- Simulated squad-mates turn up too (demo).
+  update squad_members m set checked_in_at = coalesce(m.checked_in_at, now())
+  from profiles p where p.id = m.user_id and p.is_seed and m.squad_id = p_squad and m.status = 'accepted';
+  insert into messages (squad_id, user_id, body) values (p_squad, v_me, '📍 I''m here!');
 end $$;

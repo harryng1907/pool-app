@@ -45,6 +45,7 @@ export interface SquadMember {
   status: 'invited' | 'accepted' | 'declined';
   hidden: boolean;
   go_ahead: boolean;
+  checked_in: boolean;
 }
 
 export type SquadStatus = 'proposed' | 'confirmed' | 'completed' | 'cancelled';
@@ -55,6 +56,8 @@ export interface Squad {
   status: SquadStatus;
   my_status: 'invited' | 'accepted' | 'declined';
   my_go_ahead: boolean;
+  my_checked_in: boolean;
+  ai_reason: string | null; // one sentence written by Claude
   respond_by: string; // proposed squads: answer by then, or the squad goes ahead without you
   starts_at: string;
   ends_at: string;

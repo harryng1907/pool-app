@@ -19,6 +19,7 @@ interface ConfirmedScreenProps {
   onRate: () => void;
   onBack: () => void;
   onOpenChat: () => void;
+  onCheckIn: () => void;
   onReport: (userId: string, reason: string) => Promise<void>;
 }
 
@@ -51,12 +52,14 @@ export const ConfirmedScreen: React.FC<ConfirmedScreenProps> = ({
   onBack,
   onOpenChat,
   onReport,
+  onCheckIn,
 }) => {
   const [calendarAdded, setCalendarAdded] = useState(false);
   const [reporting, setReporting] = useState<string | null>(null);
   const [reported, setReported] = useState<Set<string>>(new Set());
   const done = squad.status === 'completed';
   const accepted = squad.members.filter((m) => m.status === 'accepted');
+  const here = accepted.filter((m) => m.checked_in && !m.is_me).map((m) => m.name);
 
   return (
     <ScrollView
@@ -135,6 +138,15 @@ export const ConfirmedScreen: React.FC<ConfirmedScreenProps> = ({
         </View>
       </View>
 
+      {squad.ai_reason && (
+        <View style={[styles.aiQuote, { marginTop: 4 }]}>
+          <View style={styles.aiBadge}>
+            <Ionicons name="sparkles" size={11} color="#FFFFFF" />
+            <Text style={styles.aiBadgeText}>AI</Text>
+          </View>
+          <Text style={styles.aiText}>{squad.ai_reason}</Text>
+        </View>
+      )}
       <View style={styles.squadSection}>
         <View style={styles.squadSectionHeader}>
           <Text style={styles.squadSectionTitle}>Your Squad ({accepted.length})</Text>
@@ -157,7 +169,7 @@ export const ConfirmedScreen: React.FC<ConfirmedScreenProps> = ({
               <View style={styles.memberInfo}>
                 <View style={styles.memberNameRow}>
                   <Text style={styles.memberNameText}>
-                    {member.name} {member.is_me && '(You)'}
+                    {member.name} {member.is_me && '(You)'} {member.checked_in && '📍'}
                   </Text>
                   <View style={[styles.degreeTag, member.is_me ? styles.degreeTagUser : styles.degreeTagNormal]}>
                     <Text
@@ -216,6 +228,26 @@ export const ConfirmedScreen: React.FC<ConfirmedScreenProps> = ({
       </View>
 
       <View style={styles.bottomActionContainer}>
+        {!done &&
+          (squad.my_checked_in ? (
+            <View style={styles.hereBox}>
+              <Ionicons name="checkmark-circle" size={20} color={THEME.colors.successGreen} />
+              <Text style={styles.hereText}>
+                You're checked in{here.length ? ` · ${here.join(', ')} ${here.length === 1 ? 'is' : 'are'} here too` : ''}
+              </Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.hereButton, busy && { opacity: 0.6 }]}
+              onPress={onCheckIn}
+              disabled={busy}
+              activeOpacity={0.85}
+              accessibilityLabel="I'm here, check in"
+            >
+              <Ionicons name="location" size={20} color="#FFFFFF" />
+              <Text style={styles.calendarButtonText}>I'm here</Text>
+            </TouchableOpacity>
+          ))}
         <TouchableOpacity style={styles.chatButton} onPress={onOpenChat} activeOpacity={0.85}>
           <Ionicons name="chatbubbles" size={20} color="#FFFFFF" />
           <Text style={styles.calendarButtonText}>Squad chat</Text>
@@ -607,5 +639,62 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#B91C1C',
     marginTop: 6,
+  },
+  aiQuote: {
+    backgroundColor: '#FFF8F1',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: THEME.colors.primaryOrange,
+  },
+  aiBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    alignSelf: 'flex-start',
+    backgroundColor: THEME.colors.primaryOrange,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginBottom: 6,
+  },
+  aiBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  aiText: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600',
+    color: THEME.colors.textPrimary,
+  },
+
+  hereButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 56,
+    borderRadius: THEME.radii.pill,
+    backgroundColor: THEME.colors.successGreen,
+    marginBottom: 12,
+  },
+  hereBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: THEME.colors.successGreenLight,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+  },
+  hereText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#065F46',
   },
 });

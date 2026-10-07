@@ -437,3 +437,9 @@ select p.id, 'app_open', d + make_interval(hours => 8 + (abs(hashtext(p.id::text
 from public.profiles p
 cross join lateral generate_series(date_trunc('day', p.created_at), now() - interval '1 day', interval '1 day') d
 where p.is_seed and abs(hashtext(p.id::text || d::text)) % 10 < 4;
+
+-- Most people in finished simulated squads checked in (attendance for the metrics screen).
+update public.squad_members m set checked_in_at = s.starts_at + interval '5 minutes'
+from public.squads s
+where s.id = m.squad_id and s.status = 'completed' and s.reasons = '{"Simulated history"}'
+  and m.status = 'accepted' and abs(hashtext(m.user_id::text || s.id::text)) % 7 <> 0;

@@ -129,6 +129,15 @@ export const SquadsScreen: React.FC<SquadsScreenProps> = ({
           </View>
         </View>
 
+        {squad.ai_reason && (
+          <View style={styles.aiQuote}>
+            <View style={styles.aiBadge}>
+              <Ionicons name="sparkles" size={11} color="#FFFFFF" />
+              <Text style={styles.aiBadgeText}>AI</Text>
+            </View>
+            <Text style={styles.aiText}>{squad.ai_reason}</Text>
+          </View>
+        )}
         <View style={styles.reasonsList}>
           {squad.reasons.map((reason) => (
             <View key={reason} style={styles.reasonItem}>
@@ -610,5 +619,36 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: THEME.colors.deepTealDark,
+  },
+  aiQuote: {
+    backgroundColor: '#FFF8F1',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: THEME.colors.primaryOrange,
+  },
+  aiBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    alignSelf: 'flex-start',
+    backgroundColor: THEME.colors.primaryOrange,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginBottom: 6,
+  },
+  aiBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  aiText: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600',
+    color: THEME.colors.textPrimary,
   },
 });

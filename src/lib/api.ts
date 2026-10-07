@@ -90,6 +90,16 @@ export const respondToSquad = (squadId: string, accept: boolean) =>
 /** Vote to start with whoever has said yes. Returns 'confirmed' once everyone who said yes agrees. */
 export const voteGoAhead = (squadId: string) => rpc<string>('vote_go_ahead', { p_squad: squadId });
 
+/** "I'm here" at the session (real attendance). */
+export const checkIn = (squadId: string) => rpc<void>('check_in', { p_squad: squadId });
+
+/** Ask Claude (Edge Function) to write the "why you matched" sentence. Returns null if unavailable. */
+export async function requestAiReason(squadId: string): Promise<string | null> {
+  const { data, error } = await supabase.functions.invoke('match-reason', { body: { squad_id: squadId } });
+  if (error || !data?.reason) return null;
+  return data.reason as string;
+}
+
 export const endSession = (squadId: string) => rpc<void>('end_session', { p_squad: squadId });
 
 export const rateSquad = (

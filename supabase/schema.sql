@@ -6,6 +6,7 @@
 -- =====================================================================
 
 create extension if not exists pgcrypto with schema extensions;
+create extension if not exists pg_trgm with schema extensions;
 
 drop table if exists
   public.messages, public.app_events, public.reports, public.venue_ratings, public.member_ratings,
@@ -100,6 +101,7 @@ create table public.squads (
   status       text not null default 'proposed'
                check (status in ('proposed','confirmed','completed','cancelled')),
   reasons      text[] not null default '{}',
+  ai_reason    text,   -- one sentence written by Claude from everyone's own words
   rebook_of    uuid references public.squads(id) on delete set null,
   created_by   uuid references public.profiles(id) on delete set null,
   created_at   timestamptz not null default now()
@@ -111,6 +113,7 @@ create table public.squad_members (
   status        text not null default 'invited' check (status in ('invited','accepted','declined')),
   responded_at  timestamptz,
   go_ahead      boolean not null default false,  -- voted to start without people who haven't answered
+  checked_in_at timestamptz,                       -- tapped "I'm here" at the session
   primary key (squad_id, user_id)
 );
 
