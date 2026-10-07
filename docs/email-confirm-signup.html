@@ -1,0 +1,105 @@
+<!--
+  Pool — "Confirm signup" email template for Supabase.
+  Paste into: Supabase → Authentication → Emails → Templates → Confirm signup → Message body (Source).
+  Subject:    Confirm your UNSW email to join Pool 🫧
+  Uses Supabase variables: {{ .ConfirmationURL }} and {{ .Email }}. Table layout + inline styles so it renders in Outlook (UNSW mail).
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light only" />
+    <title>Confirm your email</title>
+  </head>
+  <body style="margin:0; padding:0; background-color:#F9F9F6;">
+    <!-- Preheader (preview text in the inbox list) -->
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:#F9F9F6;">
+      One tap and you're in. Swipe on things you'd do — we'll find your squad.
+    </div>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F9F9F6;">
+      <tr>
+        <td align="center" style="padding:32px 16px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px; background-color:#FFFFFF; border:1px solid #EAEAEA; border-radius:24px;">
+            <!-- Logo -->
+            <tr>
+              <td align="center" style="padding:32px 32px 8px 32px;">
+                <img src="https://pool-app-gules.vercel.app/icon-192.png" width="72" height="72" alt="Pool" style="display:block; border:0; border-radius:18px;" />
+              </td>
+            </tr>
+
+            <!-- Heading -->
+            <tr>
+              <td align="center" style="padding:16px 32px 4px 32px; font-family:'Segoe UI', Helvetica, Arial, sans-serif; font-size:26px; line-height:32px; font-weight:800; color:#0E1726;">
+                You're one tap away 🎉
+              </td>
+            </tr>
+            <tr>
+              <td align="center" style="padding:4px 32px 24px 32px; font-family:'Segoe UI', Helvetica, Arial, sans-serif; font-size:15px; line-height:22px; color:#5A6578;">
+                Confirm your UNSW email to start swiping on things you'd actually do.
+              </td>
+            </tr>
+
+            <!-- Button -->
+            <tr>
+              <td align="center" style="padding:0 32px 24px 32px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td align="center" bgcolor="#F57C2A" style="border-radius:30px;">
+                      <a href="{{ .ConfirmationURL }}" target="_blank"
+                         style="display:inline-block; padding:16px 36px; font-family:'Segoe UI', Helvetica, Arial, sans-serif; font-size:17px; font-weight:800; color:#FFFFFF; text-decoration:none; border-radius:30px;">
+                        Confirm &amp; join Pool &rarr;
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Three icon points -->
+            <tr>
+              <td style="padding:0 24px 8px 24px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#E8F4F6; border-radius:18px;">
+                  <tr>
+                    <td width="33%" align="center" valign="top" style="padding:16px 6px; font-family:'Segoe UI', Helvetica, Arial, sans-serif;">
+                      <div style="font-size:24px; line-height:28px;">🃏</div>
+                      <div style="font-size:12px; line-height:16px; font-weight:700; color:#083B43; padding-top:6px;">Swipe activities,<br />not people</div>
+                    </td>
+                    <td width="34%" align="center" valign="top" style="padding:16px 6px; font-family:'Segoe UI', Helvetica, Arial, sans-serif;">
+                      <div style="font-size:24px; line-height:28px;">👥</div>
+                      <div style="font-size:12px; line-height:16px; font-weight:700; color:#083B43; padding-top:6px;">Squads of 2–4,<br />formed for you</div>
+                    </td>
+                    <td width="33%" align="center" valign="top" style="padding:16px 6px; font-family:'Segoe UI', Helvetica, Arial, sans-serif;">
+                      <div style="font-size:24px; line-height:28px;">📍</div>
+                      <div style="font-size:12px; line-height:16px; font-weight:700; color:#083B43; padding-top:6px;">A real time &amp;<br />public spot</div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Fallback link -->
+            <tr>
+              <td style="padding:20px 32px 8px 32px; font-family:'Segoe UI', Helvetica, Arial, sans-serif; font-size:12px; line-height:18px; color:#8E9AA8;">
+                Button not working? Copy this link into your browser:<br />
+                <a href="{{ .ConfirmationURL }}" style="color:#0E5B66; word-break:break-all;">{{ .ConfirmationURL }}</a>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td style="padding:16px 32px 28px 32px; font-family:'Segoe UI', Helvetica, Arial, sans-serif; font-size:12px; line-height:18px; color:#8E9AA8; border-top:1px solid #F0F0EE;">
+                🛡️ Sent to {{ .Email }} because someone signed up for Pool with it. Didn't sign up? Just ignore this email — nothing happens without the tap.
+              </td>
+            </tr>
+          </table>
+
+          <div style="font-family:'Segoe UI', Helvetica, Arial, sans-serif; font-size:11px; color:#B8C2CC; padding-top:16px;">
+            Pool · made by UNSW students, for UNSW students
+          </div>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
