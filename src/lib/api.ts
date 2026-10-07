@@ -45,6 +45,44 @@ export async function signIn(email: string, password: string) {
   if (error) throw new Error(error.message === 'Email not confirmed' ? 'Check your UNSW inbox and confirm your email first.' : error.message);
 }
 
+/**
+ * Sign in with the student's UNSW Microsoft 365 account (zID@ad.unsw.edu.au).
+ * Supabase's Azure provider is locked to UNSW's tenant, and the database rejects any non-UNSW email.
+ * Web: redirects to Microsoft and back. (Native store builds will use an in-app browser later.)
+ */
+export async function signInWithMicrosoft() {
+  // Don't send people to a raw error page if the provider isn't switched on in Supabase yet.
+  const settings = await fetch(`${process.env.EXPO_PUBLIC_SUPABASE_URL}/auth/v1/settings`, {
+    headers: { apikey: process.env.EXPO_PUBLIC_SUPABASE_KEY ?? '' },
+  })
+    .then((r) => r.json())
+    .catch(() => null);
+  if (settings && !settings.external?.azure) {
+    throw new Error("UNSW sign-in isn't switched on yet — use your UNSW email below.");
+  }
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'azure',
+    options: {
+      scopes: 'openid email profile',
+      redirectTo: typeof window !== 'undefined' && window.location ? window.location.origin : undefined,
+    },
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** If Microsoft sign-in bounced back with an error, turn it into a friendly message (and clean the URL). */
+export function takeAuthRedirectError(): string | null {
+  if (typeof window === 'undefined' || !window.location) return null;
+  const params = new URLSearchParams(window.location.search + '&' + window.location.hash.replace(/^#/, ''));
+  const raw = params.get('error_description') || params.get('error');
+  if (!raw) return null;
+  window.history.replaceState(null, '', window.location.pathname);
+  if (/database error/i.test(raw)) return 'Pool is only open to UNSW students — use your zID@ad.unsw.edu.au account.';
+  if (/provider is not enabled|unsupported provider/i.test(raw)) return 'UNSW sign-in isn\'t switched on yet. Use your UNSW email below.';
+  if (/admin|consent|approval/i.test(raw)) return 'UNSW needs to approve Pool for Microsoft sign-in. Use your UNSW email below for now.';
+  return `Microsoft sign-in didn't finish: ${raw.replace(/\+/g, ' ')}`;
+}
+
 /** A private throwaway account (Supabase anonymous sign-in) — each judge/visitor gets their own. */
 export async function signInGuest() {
   const { error } = await supabase.auth.signInAnonymously();

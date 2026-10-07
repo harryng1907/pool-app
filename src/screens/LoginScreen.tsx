@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,29 @@ import {
   ActivityIndicator,
   ScrollView,
   TextInput,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { THEME } from '../theme';
-import { DEMO_ACCOUNTS, isUnswEmail, signIn, signInDemo, signInGuest, signUp } from '../lib/api';
+import {
+  DEMO_ACCOUNTS,
+  isUnswEmail,
+  signIn,
+  signInDemo,
+  signInGuest,
+  signInWithMicrosoft,
+  signUp,
+  takeAuthRedirectError,
+} from '../lib/api';
+
+// The four-square Microsoft mark, drawn so we don't need an image.
+const MicrosoftMark: React.FC = () => (
+  <View style={{ width: 20, height: 20, flexDirection: 'row', flexWrap: 'wrap', gap: 2 }}>
+    {['#F25022', '#7FBA00', '#00A4EF', '#FFB900'].map((c) => (
+      <View key={c} style={{ width: 9, height: 9, backgroundColor: c }} />
+    ))}
+  </View>
+);
 
 type Mode = 'join' | 'login';
 
@@ -24,6 +43,28 @@ export const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [checkInbox, setCheckInbox] = useState(false);
+  const [showEmail, setShowEmail] = useState(Platform.OS !== 'web');
+
+  // Coming back from Microsoft with an error (e.g. a non-UNSW account)?
+  useEffect(() => {
+    const message = takeAuthRedirectError();
+    if (message) {
+      setError(message);
+      setShowEmail(true);
+    }
+  }, []);
+
+  const microsoft = async () => {
+    setPending('microsoft');
+    setError(null);
+    try {
+      await signInWithMicrosoft(); // navigates away to Microsoft on success
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not start UNSW sign-in');
+      setShowEmail(true);
+      setPending(null);
+    }
+  };
 
   const canSubmit =
     isUnswEmail(email) && password.length >= 8;
@@ -91,7 +132,33 @@ export const LoginScreen: React.FC = () => {
         </View>
       </View>
 
-      {checkInbox ? (
+      {Platform.OS === 'web' && !checkInbox && (
+        <>
+          <TouchableOpacity
+            style={[styles.msButton, pending !== null && { opacity: 0.6 }]}
+            onPress={microsoft}
+            disabled={pending !== null}
+            activeOpacity={0.85}
+            accessibilityLabel="Continue with your UNSW Microsoft account"
+          >
+            {pending === 'microsoft' ? <ActivityIndicator color={THEME.colors.textPrimary} /> : <MicrosoftMark />}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.msTitle}>Continue with UNSW</Text>
+              <Text style={styles.msSub}>Your zID Microsoft login · no new password</Text>
+            </View>
+            <Ionicons name="arrow-forward" size={18} color={THEME.colors.textMuted} />
+          </TouchableOpacity>
+
+          {!showEmail && (
+            <TouchableOpacity style={styles.emailToggle} onPress={() => setShowEmail(true)}>
+              <Ionicons name="mail-outline" size={15} color={THEME.colors.deepTeal} />
+              <Text style={styles.emailToggleText}>or use your UNSW email</Text>
+            </TouchableOpacity>
+          )}
+        </>
+      )}
+
+      {!showEmail && !checkInbox ? null : checkInbox ? (
         <View style={styles.inboxBox}>
           <Ionicons name="mail-unread" size={32} color={THEME.colors.deepTeal} />
           <Text style={styles.inboxTitle}>Check your UNSW inbox</Text>
@@ -289,7 +356,42 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: THEME.colors.deepTeal,
   },
+  msButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: THEME.colors.cardWhite,
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    borderWidth: 1.5,
+    borderColor: THEME.colors.border,
+    ...THEME.shadows.card,
+  },
+  msTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: THEME.colors.textPrimary,
+  },
+  msSub: {
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+    marginTop: 2,
+  },
+  emailToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 14,
+  },
+  emailToggleText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: THEME.colors.deepTeal,
+  },
   formCard: {
+    marginTop: 4,
     backgroundColor: THEME.colors.cardWhite,
     borderRadius: 24,
     padding: 16,

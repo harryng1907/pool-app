@@ -12,16 +12,20 @@ create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 declare
   v_local text := coalesce(split_part(new.email, '@', 1), 'guest');
+  v_name  text;
 begin
   -- Guests (anonymous demo sessions) are allowed; real accounts must be UNSW.
   if not coalesce(new.is_anonymous, false) and (new.email is null
      or not (new.email ilike '%@unsw.edu.au' or new.email ilike '%.unsw.edu.au' or new.email ilike '%@pool.demo')) then
     raise exception 'Pool is only open to UNSW students (use your UNSW email).';
   end if;
-  insert into profiles (id, display_name, initials, avatar_color, real_only)
+  -- Microsoft (UNSW) sign-in brings the student's real name; email sign-up doesn't.
+  v_name := nullif(trim(coalesce(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name', '')), '');
+  insert into profiles (id, display_name, full_name, initials, avatar_color, real_only)
   values (new.id,
-          coalesce(nullif(new.raw_user_meta_data->>'name', ''), initcap(v_local)),
-          upper(left(coalesce(nullif(new.raw_user_meta_data->>'name', ''), v_local), 2)),
+          coalesce(split_part(v_name, ' ', 1), initcap(v_local)),
+          v_name,
+          upper(coalesce(left(split_part(v_name, ' ', 1), 1) || nullif(left(split_part(v_name, ' ', 2), 1), ''), left(coalesce(v_name, v_local), 2))),
           ('{#0E5B66,#2563EB,#9333EA,#DC2626,#EA580C,#16A34A,#DB2777,#0891B2}'::text[])[1 + abs(hashtext(new.id::text)) % 8],
           -- Real UNSW accounts only ever match real people; demo + guest accounts get the simulated students.
           not coalesce(new.is_anonymous, false) and new.email not ilike '%@pool.demo')
