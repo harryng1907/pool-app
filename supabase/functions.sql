@@ -112,6 +112,7 @@ begin
         'description', a.description, 'course', a.course, 'category', a.category,
         'tags', a.tags, 'icon', a.icon, 'duration_mins', a.duration_mins,
         'starts_at', a.starts_at, 'capacity', a.capacity,
+        'host', a.host, 'suggested', a.created_by is not null,
         'venue', case when a.venue_id is null then null
                       else jsonb_build_object('id', a.venue_id, 'name', a.venue_name, 'detail', a.venue_detail) end,
         'interested_count', a.interested,
@@ -402,6 +403,7 @@ begin
                'activity', jsonb_build_object(
                  'id', a.id, 'title', a.title, 'description', a.description, 'course', a.course,
                  'category', a.category, 'squad_type', a.squad_type, 'icon', a.icon, 'tags', a.tags,
+                 'host', a.host,
                  'duration_mins', a.duration_mins),
                'venue', jsonb_build_object('id', v.id, 'name', v.name, 'detail', v.detail),
                'members', (
@@ -493,6 +495,14 @@ begin
   from jsonb_array_elements(coalesce(p_scores, '[]'::jsonb)) e
   where (e->>'user_id')::uuid in (select user_id from squad_members where squad_id = p_squad and user_id <> v_me)
   on conflict (squad_id, rater_id, ratee_id) do update set score = excluded.score, created_at = now();
+
+  -- Simulated students rate you back, so the demo can show mutual connections.
+  insert into member_ratings (squad_id, rater_id, ratee_id, score)
+  select p_squad, (e->>'user_id')::uuid, v_me,
+         case when (e->>'score')::int >= 4 then 4 + abs(hashtext(v_me::text || (e->>'user_id'))) % 2 else 3 end
+  from jsonb_array_elements(coalesce(p_scores, '[]'::jsonb)) e
+  join profiles p on p.id = (e->>'user_id')::uuid and p.is_seed
+  on conflict (squad_id, rater_id, ratee_id) do nothing;
 
   if p_venue_score is not null then
     insert into venue_ratings (squad_id, rater_id, venue_id, score, comment)
@@ -654,6 +664,8 @@ begin
   delete from venue_ratings where rater_id = v_me;
   delete from app_events where user_id = v_me;
   delete from reports where reporter_id = v_me;
+  delete from activities where created_by = v_me;
+  delete from member_ratings where ratee_id = v_me;
 end $$;
 
 -- Onboarding / edit profile. Every key is optional; only keys present are changed.
@@ -777,4 +789,106 @@ begin
     raise exception 'You can only report people from your own squads';
   end if;
   insert into reports (reporter_id, reported_id, squad_id, reason) values (auth.uid(), p_user, p_squad, p_reason);
+end $$;
+
+-- ---------------------------------------------------------------------
+-- "Your people": mutual connections. No friend requests — you're connected
+-- when you've done a session together and BOTH rated each other 4★+.
+-- ---------------------------------------------------------------------
+
+create or replace function public.get_connections()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_me uuid := auth.uid();
+begin
+  if v_me is null then raise exception 'not signed in'; end if;
+  return coalesce((
+    select jsonb_agg(c order by last_at desc)
+    from (
+      select x.last_at,
+             jsonb_build_object(
+               'id', p.id, 'name', p.display_name, 'initials', p.initials, 'avatar_color', p.avatar_color,
+               'degree_short', p.degree_short, 'year', p.year, 'status_quote', p.status_quote,
+               'sessions_together', x.n, 'last_activity', x.last_title, 'last_squad_id', x.last_squad,
+               'shared_interests', to_jsonb(array(select unnest(p.interests) intersect select unnest(me.interests)))
+             ) as c
+      from (
+        select other.user_id as uid, count(*) as n, max(s.ends_at) as last_at,
+               (array_agg(a.title order by s.ends_at desc))[1] as last_title,
+               (array_agg(s.id order by s.ends_at desc))[1] as last_squad
+        from squads s
+        join activities a on a.id = s.activity_id
+        join squad_members mine on mine.squad_id = s.id and mine.user_id = v_me and mine.status = 'accepted'
+        join squad_members other on other.squad_id = s.id and other.user_id <> v_me and other.status = 'accepted'
+        where s.status = 'completed'
+        group by other.user_id
+      ) x
+      join profiles p on p.id = x.uid
+      cross join (select coalesce(interests, '{}') as interests from profiles where id = v_me) me
+      where (select avg(score) from member_ratings where rater_id = v_me and ratee_id = x.uid) >= 4
+        and (select avg(score) from member_ratings where rater_id = x.uid and ratee_id = v_me) >= 4
+        and not exists (select 1 from reports r where (r.reporter_id = v_me and r.reported_id = x.uid)
+                                                   or (r.reporter_id = x.uid and r.reported_id = v_me))
+    ) q
+  ), '[]'::jsonb);
+end $$;
+
+-- Start a new 1-on-1 with a connection: same kind of activity as last time, a new time you're both free.
+create or replace function public.invite_connection(p_user uuid)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare
+  v_last uuid;
+  v_activity text;
+begin
+  select (c->>'last_squad_id')::uuid into v_last
+  from jsonb_array_elements(get_connections()) c where (c->>'id')::uuid = p_user;
+  if v_last is null then raise exception 'You can only invite your connections'; end if;
+  select activity_id into v_activity from squads where id = v_last;
+  return form_squad(v_activity, array[p_user], v_last);
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Suggest an activity. It becomes a card in other people's decks, and the
+-- suggester is just another squad member — nobody has to "host".
+-- p: { title, squad_type, category, icon, course?, description?, duration_mins?, tags?: [] }
+-- ---------------------------------------------------------------------
+
+create or replace function public.create_activity(p jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_me     uuid := auth.uid();
+  v_title  text := trim(coalesce(p->>'title', ''));
+  v_course text := nullif(upper(replace(trim(coalesce(p->>'course', '')), ' ', '')), '');
+  v_id     text := 'u-' || substr(md5(random()::text || clock_timestamp()::text), 1, 10);
+  v_tags   text[];
+  v_squad  uuid;
+begin
+  if v_me is null then raise exception 'not signed in'; end if;
+  if length(v_title) < 4 or length(v_title) > 60 then raise exception 'Give it a short title (4–60 characters)'; end if;
+  if v_course is not null and v_course !~ '^[A-Z]{4}[0-9]{4}$' then raise exception 'Course codes look like COMP1511'; end if;
+  if (select count(*) from activities where created_by = v_me and created_at > now() - interval '1 day') >= 5 then
+    raise exception 'You can suggest up to 5 activities a day';
+  end if;
+
+  v_tags := array(select distinct t from (
+      select jsonb_array_elements_text(coalesce(p->'tags', '[]'::jsonb)) t
+      union all select v_course where v_course is not null
+    ) z where t is not null limit 5);
+
+  insert into activities (id, kind, squad_type, title, description, course, category, tags, icon, duration_mins, created_by)
+  values (v_id, 'interest',
+          coalesce(nullif(p->>'squad_type', ''), 'hobby'),
+          v_title,
+          nullif(left(trim(coalesce(p->>'description', '')), 140), ''),
+          v_course,
+          coalesce(nullif(p->>'category', ''), 'social'),
+          v_tags,
+          left(coalesce(nullif(p->>'icon', ''), 'sparkles'), 40),
+          coalesce((p->>'duration_mins')::int, 90),
+          v_me);
+
+  -- You're obviously in for your own idea — try to form a squad straight away.
+  insert into swipes (user_id, activity_id, decision) values (v_me, v_id, 'in');
+  v_squad := form_squad(v_id);
+  return jsonb_build_object('activity_id', v_id, 'squad_id', v_squad);
 end $$;

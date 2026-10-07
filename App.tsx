@@ -4,7 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Session } from '@supabase/supabase-js';
 import { THEME } from './src/theme';
-import { ActivityCard, Me, Nudge, ScreenType, Squad, TabType } from './src/types';
+import { ActivityCard, ActivityInput, Connection, Me, Nudge, ScreenType, Squad, TabType } from './src/types';
 import { supabase } from './src/lib/supabase';
 import * as api from './src/lib/api';
 import { Header } from './src/components/Header';
@@ -20,6 +20,7 @@ import { MetricsScreen } from './src/screens/MetricsScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { ChatScreen } from './src/screens/ChatScreen';
+import { SuggestScreen } from './src/screens/SuggestScreen';
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong');
 
@@ -44,11 +45,13 @@ function MainApp({ session }: { session: Session }) {
   const [matchingTags, setMatchingTags] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
+  const [connections, setConnections] = useState<Connection[]>([]);
 
   const loadSquads = useCallback(async () => {
-    const [s, n] = await Promise.all([api.getMySquads(), api.getNudges()]);
+    const [s, n, c] = await Promise.all([api.getMySquads(), api.getNudges(), api.getConnections()]);
     setSquads(s);
     setNudges(n);
+    setConnections(c);
   }, []);
 
   const loadAll = useCallback(async () => {
@@ -145,6 +148,46 @@ function MainApp({ session }: { session: Session }) {
     }
   };
 
+  // Runs the matcher behind the AI overlay, then opens the new squad (or explains why not).
+  const matchThen = async (tags: string[], run: () => Promise<string | null>, noMatch: string) => {
+    setBusy(true);
+    setMatchingTags(tags.slice(0, 3));
+    setMatching(true);
+    setNotice(null);
+    try {
+      const squadId = await atLeast(run(), 1400);
+      await loadSquads();
+      if (squadId) go('squads', 'squad', squadId);
+      else {
+        setNotice(noMatch);
+        go('discover', 'discover');
+      }
+    } catch (e) {
+      setNotice(errorText(e));
+    } finally {
+      setMatching(false);
+      setBusy(false);
+    }
+  };
+
+  const handleInvite = (c: Connection) =>
+    matchThen(
+      ['You + ' + c.name, ...c.shared_interests],
+      () => api.inviteConnection(c.id),
+      `Couldn't find a time this week when you and ${c.name} are both free.`,
+    );
+
+  const handleSuggest = (input: ActivityInput) =>
+    matchThen(
+      [input.title, ...input.tags],
+      async () => {
+        const res = await api.createActivity(input);
+        api.getDeck().then(setCards).catch(() => {});
+        return res.squad_id;
+      },
+      `Posted "${input.title}"! Nobody's free at the same time yet — we'll match you as soon as someone says I'm in.`,
+    );
+
   // --- Squad actions -------------------------------------------------
 
   const withBusy = async (fn: () => Promise<void>) => {
@@ -227,12 +270,14 @@ function MainApp({ session }: { session: Session }) {
     : screen === 'metrics' ? 'Metrics'
     : screen === 'rate' ? 'Rate'
     : screen === 'chat' ? 'Squad chat'
+    : screen === 'suggest' ? 'Suggest'
     : screen === 'squad' && openSquadData?.status !== 'proposed' ? 'Session'
     : 'Squads';
 
-  const showBack = screen === 'squad' || screen === 'rate' || screen === 'metrics' || screen === 'chat';
+  const showBack = ['squad', 'rate', 'metrics', 'chat', 'suggest'].includes(screen);
   const back = () =>
     screen === 'metrics' ? go('profile', 'profile')
+    : screen === 'suggest' ? go('discover', 'discover')
     : screen === 'chat' ? go('squads', 'squad', openSquadId)
     : go('squads', 'squads');
 
@@ -249,6 +294,7 @@ function MainApp({ session }: { session: Session }) {
         onNotForMe={handleNotForMe}
         onRebook={handleRebook}
         onRefresh={loadAll}
+        onSuggest={() => go('discover', 'suggest')}
       />
     );
   } else if (screen === 'squads') {
@@ -281,6 +327,8 @@ function MainApp({ session }: { session: Session }) {
           onReport={(userId, reason) => withBusy(() => api.reportMember(openSquadData.id, userId, reason))}
         />
       );
+  } else if (screen === 'suggest') {
+    body = <SuggestScreen busy={busy} onSubmit={handleSuggest} />;
   } else if (screen === 'chat' && openSquadData) {
     body = <ChatScreen squad={openSquadData} />;
   } else if (screen === 'rate' && openSquadData) {
@@ -300,6 +348,8 @@ function MainApp({ session }: { session: Session }) {
         onResetDemo={handleResetDemo}
         onOpenMetrics={() => go('profile', 'metrics')}
         onEditProfile={() => setEditingProfile(true)}
+        connections={connections}
+        onInvite={handleInvite}
         onSignOut={() => api.signOut()}
       />
     );

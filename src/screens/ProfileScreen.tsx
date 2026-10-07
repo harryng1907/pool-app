@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { THEME } from '../theme';
-import { Me } from '../types';
+import { Connection, Me } from '../types';
 import { yearLabel } from '../lib/format';
 import { INTERESTS } from '../lib/catalog';
 
@@ -20,6 +20,8 @@ interface ProfileScreenProps {
   onResetDemo: () => void;
   onOpenMetrics: () => void;
   onEditProfile: () => void;
+  connections: Connection[];
+  onInvite: (c: Connection) => void;
   onSignOut: () => void;
 }
 
@@ -34,6 +36,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onResetDemo,
   onOpenMetrics,
   onEditProfile,
+  connections,
+  onInvite,
   onSignOut,
 }) => {
   if (!me) {
@@ -90,6 +94,53 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <Text style={styles.statLabel}>Together</Text>
           </View>
         </View>
+      </View>
+
+      {/* Your people: you met, and you BOTH said you'd go again. No friend requests. */}
+      <View style={styles.card}>
+        <View style={styles.cardTitleRow}>
+          <Text style={[styles.cardTitle, { marginBottom: 0 }]}>Your people</Text>
+          <View style={styles.countBubble}>
+            <Ionicons name="heart" size={12} color={THEME.colors.primaryOrange} />
+            <Text style={styles.countBubbleText}>{connections.length}</Text>
+          </View>
+        </View>
+        {connections.length === 0 ? (
+          <View style={styles.peopleEmpty}>
+            <Ionicons name="people-circle-outline" size={34} color={THEME.colors.textMuted} />
+            <Text style={styles.peopleEmptyText}>
+              Do a session, rate 4★+. If they rate you 4★+ too, they show up here.
+            </Text>
+          </View>
+        ) : (
+          connections.map((c) => (
+            <View key={c.id} style={styles.personRow}>
+              <View style={[styles.personAvatar, { backgroundColor: c.avatar_color }]}>
+                <Text style={styles.personInitials}>{c.initials}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.personName}>
+                  {c.name} <Text style={styles.personMeta}>· {c.degree_short} · {yearLabel(c.year)} yr</Text>
+                </Text>
+                <View style={styles.personSubRow}>
+                  <Ionicons name="repeat" size={12} color={THEME.colors.textMuted} />
+                  <Text style={styles.personSub} numberOfLines={1}>
+                    {c.sessions_together}× · {c.last_activity}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={[styles.inviteBtn, busy && { opacity: 0.5 }]}
+                onPress={() => onInvite(c)}
+                disabled={busy}
+                accessibilityLabel={`Invite ${c.name} to a new session`}
+              >
+                <Ionicons name="calendar" size={14} color="#FFFFFF" />
+                <Text style={styles.inviteText}>Invite</Text>
+              </TouchableOpacity>
+            </View>
+          ))
+        )}
       </View>
 
       {me.interests.length > 0 && (
@@ -500,5 +551,82 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     color: THEME.colors.deepTeal,
+  },
+  countBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: THEME.radii.pill,
+    backgroundColor: THEME.colors.primaryOrangeLight,
+  },
+  countBubbleText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: THEME.colors.primaryOrange,
+  },
+  peopleEmpty: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  peopleEmptyText: {
+    flex: 1,
+    fontSize: 13,
+    color: THEME.colors.textSecondary,
+    lineHeight: 18,
+  },
+  personRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 8,
+  },
+  personAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  personInitials: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  personName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: THEME.colors.textPrimary,
+  },
+  personMeta: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: THEME.colors.textMuted,
+  },
+  personSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  personSub: {
+    flex: 1,
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+  },
+  inviteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: THEME.radii.pill,
+    backgroundColor: THEME.colors.deepTeal,
+  },
+  inviteText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 });

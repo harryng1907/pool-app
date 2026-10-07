@@ -1,7 +1,7 @@
 // Every call the app makes to the backend lives here.
 // Business logic (matching, privacy, scheduling) runs in Postgres — see supabase/schema.sql.
 import { supabase } from './supabase';
-import { ActivityCard, Me, Message, Metrics, Nudge, ProfileInput, Squad } from '../types';
+import { ActivityCard, ActivityInput, Connection, Me, Message, Metrics, Nudge, ProfileInput, Squad } from '../types';
 
 async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.rpc(fn, args);
@@ -97,6 +97,17 @@ export const rateSquad = (
   });
 
 export const getNudges = () => rpc<Nudge[]>('get_nudges');
+
+/** Suggest an activity. Returns the new card id and a squad id if one formed straight away. */
+export const createActivity = (input: ActivityInput) =>
+  rpc<{ activity_id: string; squad_id: string | null }>('create_activity', { p: input });
+
+// --- Your people --------------------------------------------------------
+
+export const getConnections = () => rpc<Connection[]>('get_connections');
+
+/** New 1-on-1 with a connection. Returns the squad id, or null if you share no free time this week. */
+export const inviteConnection = (userId: string) => rpc<string | null>('invite_connection', { p_user: userId });
 
 // --- Chat & safety ----------------------------------------------------
 

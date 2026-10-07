@@ -8,8 +8,11 @@ Use this for the National Final deck. **Built** = working in the app today (show
 | AI uses ratings for the next recommendation ("you rated A highly, go with A again") | **Built** | Discover shows "Go again with Mei?" (adds "Weekend's here!" Fri–Sun). Tapping it re-matches the same people at a new time. The matcher gives +6 to people you rated 4★+, and never matches you with someone either of you rated ≤2★. |
 | Bad café → AI picks a different place next time | **Built** | Venues rated ≤2★ by anyone in the squad are skipped. The reason says so: "Moved to K17 — you rated Law Library low". |
 | Learn habits (group of 5, goes to library) → nudge "weekend, library again?" | **Partly** | Built: hobbies from onboarding and every "I'm in" swipe shape the deck and the matcher. Built: in-app weekend nudge. Plan: push notifications. |
+| Build connections that last | **Built** | "Your people": after a session, if you BOTH rated each other 4★+, you're connected and can invite each other to new sessions. No friend requests, no browsing. |
 | Different from Tinder: connections, not romance; groups | **Built** | You swipe activities, not people. No photos before a squad forms, no romantic field, squads of 2–4, no inbox or DMs. |
-| Separate sessions → choose what type of group to join | **Built** | Filter chips on Discover: Study / Hobby / Career. |
+| Separate sessions → choose what type of group to join | **Built** | Filter chips on Discover: Societies / Study / Hobby / Career. |
+| (Team idea) Society events | **Built** | Society cards with a badge and "Go as a squad". Pitch: "Societies give you the event, Pool gives you the people to walk in with." The demo uses made-up society names; real ones would be a partnership. |
+| (Team idea) Create your own event | **Built** | ➕ Suggest an activity. Nobody hosts: it becomes a card and the matcher builds the squad, so it's still no first move. |
 | 1-on-1 or 2–3 people? Close the group when full | **Built** | Onboarding: 1-on-1 / Small group / Either. The matcher respects it. Real sessions show "N spots open" and cap at 4. |
 | Survey + rating after every session → recommendations | **Built** | The Rate screen is the post-session survey. It feeds the matcher and the metrics. |
 | Validate a concrete date and time | **Built** | Every squad has an exact time from everyone's free-time grid, plus a public venue. Add to Calendar opens a pre-filled Google Calendar event. |

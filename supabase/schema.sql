@@ -77,6 +77,8 @@ create table public.activities (
   venue_id       text references public.venues(id),
   starts_at      timestamptz,
   capacity       int not null default 4 check (capacity between 2 and 4),
+  host           text,   -- society running the event (null for everything else)
+  created_by     uuid references public.profiles(id) on delete cascade,  -- set when a student suggested it
   created_at     timestamptz not null default now()
 );
 
@@ -160,6 +162,7 @@ create index on public.messages (squad_id, created_at);
 alter table public.messages enable row level security;
 
 create index on public.swipes (activity_id, decision);
+create index on public.activities (created_by, created_at);
 create index on public.squad_members (user_id);
 create index on public.member_ratings (rater_id);
 create index on public.app_events (user_id, created_at);

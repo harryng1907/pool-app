@@ -1,6 +1,6 @@
 export type TabType = 'discover' | 'squads' | 'profile';
 
-export type ScreenType = 'discover' | 'squads' | 'squad' | 'rate' | 'chat' | 'profile' | 'metrics';
+export type ScreenType = 'discover' | 'squads' | 'squad' | 'rate' | 'chat' | 'profile' | 'metrics' | 'suggest';
 
 export type SquadType = 'deadline' | 'hobby' | 'career';
 export type Category = 'quiet' | 'social' | 'active' | 'maker' | 'food';
@@ -25,6 +25,8 @@ export interface ActivityCard {
   duration_mins: number;
   starts_at: string | null;
   capacity: number;
+  host: string | null; // society running it
+  suggested: boolean; // suggested by a student
   venue: Venue | null;
   interested_count: number;
   spots_left: number | null;
@@ -67,6 +69,7 @@ export interface Squad {
     icon: string;
     tags: string[];
     duration_mins: number;
+    host: string | null;
   };
   venue: Venue;
   members: SquadMember[];
@@ -140,4 +143,31 @@ export interface Message {
   name: string;
   initials: string;
   avatar_color: string;
+}
+
+// From get_connections — people you've met and both rated 4★+
+export interface Connection {
+  id: string;
+  name: string;
+  initials: string;
+  avatar_color: string;
+  degree_short: string;
+  year: number;
+  status_quote: string | null;
+  sessions_together: number;
+  last_activity: string;
+  last_squad_id: string;
+  shared_interests: string[];
+}
+
+// Sent to create_activity
+export interface ActivityInput {
+  title: string;
+  squad_type: SquadType;
+  category: Category;
+  icon: string;
+  course?: string;
+  description?: string;
+  duration_mins: number;
+  tags: string[];
 }

@@ -87,7 +87,10 @@ npm run typecheck
 - [x] Rebook nudge from ratings
 - [x] Create account (UNSW email + password) and icon-first onboarding with hobbies
 - [x] Squad chat with quick replies; report/block
-- [x] Web build verified (`npm run build:web`)
+- [x] Web build verified (`npm run build:web`), Vercel config (`vercel.json`)
+- [x] Society events: 🎈 Societies filter, society badge, "Go as a squad" — "Societies give you the event, Pool gives you the people to walk in with." Society names are made-up examples (no partnerships yet).
+- [x] Suggest an activity (➕ on Discover): icon, title, type, public-place type, length, vibe tags, optional course. Nobody hosts — it becomes a card and the matcher forms the squad. Max 5/day, titles 4–60 chars.
+- [x] "Your people" on Profile: you're connected only when you did a session together AND both rated each other 4★+. No friend requests, no browsing. "Invite" starts a new 1-on-1 at a time you're both free. (Simulated students rate you back automatically for the demo.)
 
 ### Next (in priority order)
 - [ ] Deploy: `npm run build:web` → drag the `dist` folder onto https://app.netlify.com/drop → share the URL
@@ -97,6 +100,9 @@ npm run typecheck
 - [ ] Test on 2 phones at once with two demo accounts (Alex + Sam both swipe the same card → real invite/accept flow)
 - [ ] Claude-written match reason (Supabase Edge Function; key stays server-side; keep current reasons as fallback)
 - [ ] Rotate the database password after the hackathon (it was shared in chat) and update `.env.local`
+
+### Why no friend list / profile browsing (if a judge asks)
+Pool is for people who can't make the first move. A friend-request button *is* a first move, and profile browsing means being judged by strangers — exactly what our survey said stops people. So connections only form from real sessions where both people independently said "I'd go again". That's also a safety feature: nobody can find or contact you unless you've met them in a public place and both chose to keep in touch.
 
 ### Deliberately cut
 Push notifications, vouchers/partner perks, multi-university, profile browsing, DM inbox, compatibility % scores.

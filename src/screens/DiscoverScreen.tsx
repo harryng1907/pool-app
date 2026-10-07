@@ -23,8 +23,10 @@ const TYPE_ICON: Record<ActivityCard['squad_type'], IconName> = {
 };
 
 // "Pick what kind of squad you want" — filter chips on top of the deck.
-const FILTERS: { key: 'all' | SquadType; label: string; icon: IconName }[] = [
+type Filter = 'all' | 'society' | SquadType;
+const FILTERS: { key: Filter; label: string; icon: IconName }[] = [
   { key: 'all', label: 'All', icon: 'apps' },
+  { key: 'society', label: 'Societies', icon: 'balloon' },
   { key: 'deadline', label: 'Study', icon: 'hourglass-outline' },
   { key: 'hobby', label: 'Hobby', icon: 'sparkles' },
   { key: 'career', label: 'Career', icon: 'trending-up' },
@@ -56,6 +58,7 @@ interface DiscoverScreenProps {
   onNotForMe: (card: ActivityCard) => void;
   onRebook: (nudge: Nudge) => void;
   onRefresh: () => void;
+  onSuggest: () => void;
 }
 
 export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
@@ -68,9 +71,13 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
   onNotForMe,
   onRebook,
   onRefresh,
+  onSuggest,
 }) => {
-  const [filter, setFilter] = useState<'all' | SquadType>('all');
-  const visible = filter === 'all' ? cards : cards.filter((c) => c.squad_type === filter);
+  const [filter, setFilter] = useState<Filter>('all');
+  const visible =
+    filter === 'all' ? cards
+    : filter === 'society' ? cards.filter((c) => c.host)
+    : cards.filter((c) => c.squad_type === filter);
   const card = visible[0];
   const nudge = nudges[0];
 
@@ -149,7 +156,12 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
       )}
 
       <View style={styles.bannerRow}>
-        <View style={styles.filterRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ flexGrow: 0, flexShrink: 1 }}
+          contentContainerStyle={styles.filterRow}
+        >
           {FILTERS.map((ft) => {
             const on = filter === ft.key;
             return (
@@ -164,7 +176,10 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
               </TouchableOpacity>
             );
           })}
-        </View>
+        </ScrollView>
+        <TouchableOpacity style={styles.suggestBtn} onPress={onSuggest} accessibilityLabel="Suggest an activity">
+          <Ionicons name="add" size={22} color="#FFFFFF" />
+        </TouchableOpacity>
       </View>
 
       {loading && !card ? (
@@ -209,16 +224,25 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
               </Animated.View>
 
               <View style={styles.badgeRow}>
-                <View style={styles.cohortBadge}>
-                  <Ionicons
-                    name={card.course ? 'school' : TYPE_ICON[card.squad_type]}
-                    size={13}
-                    color={THEME.colors.deepTeal}
-                  />
-                  <Text style={styles.cohortBadgeText}>
-                    {(card.course ?? SQUAD_TYPE_LABEL[card.squad_type]).toUpperCase()}
-                  </Text>
-                </View>
+                {card.host ? (
+                  <View style={[styles.cohortBadge, styles.societyBadge]}>
+                    <Ionicons name="balloon" size={13} color="#7C3AED" />
+                    <Text style={[styles.cohortBadgeText, { color: '#7C3AED' }]} numberOfLines={1}>
+                      {card.host.toUpperCase()}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.cohortBadge}>
+                    <Ionicons
+                      name={card.course ? 'school' : card.suggested ? 'person' : TYPE_ICON[card.squad_type]}
+                      size={13}
+                      color={THEME.colors.deepTeal}
+                    />
+                    <Text style={styles.cohortBadgeText}>
+                      {card.course ?? (card.suggested ? 'STUDENT IDEA' : SQUAD_TYPE_LABEL[card.squad_type].toUpperCase())}
+                    </Text>
+                  </View>
+                )}
                 <View style={styles.verifiedCampusTag}>
                   <Ionicons
                     name={card.kind === 'session' ? 'radio-button-on' : 'sparkles'}
@@ -226,7 +250,7 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
                     color={card.kind === 'session' ? THEME.colors.successGreen : THEME.colors.primaryOrange}
                   />
                   <Text style={styles.verifiedCampusText}>
-                    {card.kind === 'session' ? 'Real session' : 'AI picks the time'}
+                    {card.host ? 'Go as a squad' : card.kind === 'session' ? 'Real session' : 'AI picks the time'}
                   </Text>
                 </View>
               </View>
@@ -754,5 +778,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '900',
     letterSpacing: 0.5,
+  },
+  suggestBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: THEME.colors.primaryOrange,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+    ...THEME.shadows.buttonOrange,
+  },
+  societyBadge: {
+    backgroundColor: '#F3E8FF',
+    flexShrink: 1,
+    marginRight: 8,
   },
 });

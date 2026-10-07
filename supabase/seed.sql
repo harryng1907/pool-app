@@ -123,6 +123,40 @@ values
    'Short climbs, lots of sitting around chatting.',
    null, 'active', '{climbing,sport,beginner friendly}', 'fitness', 90, null, null, 4);
 
+-- Society events. "Don't go alone — go as a squad." Society names are made-up
+-- examples (no real society has partnered with us yet).
+insert into public.activities
+  (id, kind, squad_type, title, description, course, category, tags, icon, duration_mins, venue_id, starts_at, capacity, host)
+values
+  ('soc-byte-games', 'session', 'hobby', 'Games night',
+   'Mario Kart, Jackbox and too much pizza. Walk in with your squad, not alone.',
+   null, 'social', '{board games,social,chill}', 'game-controller', 150,
+   'roundhouse', public.pool_next_slot(4, 15), 4, 'Byte Club'),
+  ('soc-boba-crawl', 'session', 'hobby', 'Boba crawl: 3 shops, 1 afternoon',
+   'Rate every drink. Strong opinions encouraged.',
+   null, 'food', '{boba,social,chill}', 'ice-cream', 90,
+   'gongcha', public.pool_next_slot(2, 15), 4, 'Boba Appreciation Society'),
+  ('soc-coastal-walk', 'session', 'hobby', 'Coastal walk: Coogee to Bondi',
+   'Easy pace, lots of photo stops. Meet on the Library Lawn, bus together.',
+   null, 'social', '{outdoors,running,photography}', 'walk', 180,
+   'library-lawn', public.pool_next_slot(6, 10), 4, 'Hike & Seek'),
+  ('soc-board-guild', 'session', 'hobby', 'Beginners'' table: learn a new board game',
+   'Someone teaches, nobody needs to know the rules.',
+   null, 'food', '{board games,chill,social}', 'dice', 120,
+   'esmes', public.pool_next_slot(3, 17), 4, 'Board Game Guild'),
+  ('soc-film-night', 'session', 'hobby', 'Outdoor screening: Spirited Away',
+   'Bring a blanket. Popcorn provided.',
+   null, 'social', '{anime,chill,outdoors}', 'film', 120,
+   'library-lawn', public.pool_next_slot(4, 16), 4, 'Reel Film Society'),
+  ('soc-pitch-night', 'session', 'career', 'Pitch night: 2-minute ideas',
+   'Watch student founders pitch, then grab a drink and talk ideas.',
+   null, 'social', '{startups,career,building}', 'bulb', 120,
+   'roundhouse', public.pool_next_slot(3, 18), 4, 'Startup Circle'),
+  ('soc-wit-qa', 'session', 'career', 'Internship Q&A with final-years',
+   'How they got their internships, what they''d do differently.',
+   null, 'food', '{internships,career,coding interview}', 'briefcase', 90,
+   'quad-food', public.pool_next_slot(4, 13), 4, 'Women in Tech Circle');
+
 -- ---------------------------------------------------------------------
 -- People
 -- ---------------------------------------------------------------------
@@ -309,12 +343,28 @@ update public.profiles p set interests = coalesce((
 ), '{}')
 where p.is_seed;
 
+-- Simulated students say "I'm in" to society events that suit them and when they're free.
+insert into public.swipes (user_id, activity_id, decision, created_at)
+select p.id, a.id, 'in', now() - make_interval(hours => (random() * 24 * 5)::int)
+from public.activities a
+cross join lateral (
+  select pr.id from public.profiles pr
+  where pr.is_seed
+    and public.pool_is_free(pr.id, a.starts_at, a.duration_mins)
+    and pr.interests && a.tags
+  order by cardinality(array(select unnest(pr.interests) intersect select unnest(a.tags))) desc, md5(pr.id::text || a.id)
+  limit 5
+) p
+where a.host is not null
+on conflict do nothing;
+
 -- A few "not for me" swipes so interest isn't uniformly positive.
 insert into public.swipes (user_id, activity_id, decision, created_at)
 select p.id, a.id, 'pass', now() - make_interval(hours => (random() * 24 * 10)::int)
 from _people p cross join lateral (
   select id from public.activities a
   where not (a.id = any(p.says_yes))
+    and not exists (select 1 from public.swipes sw where sw.user_id = p.id and sw.activity_id = a.id)
   order by md5(a.id || p.email) limit 3
 ) a
 where p.is_seed;
