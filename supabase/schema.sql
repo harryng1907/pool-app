@@ -110,6 +110,7 @@ create table public.squad_members (
   user_id       uuid references public.profiles(id) on delete cascade,
   status        text not null default 'invited' check (status in ('invited','accepted','declined')),
   responded_at  timestamptz,
+  go_ahead      boolean not null default false,  -- voted to start without people who haven't answered
   primary key (squad_id, user_id)
 );
 

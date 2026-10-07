@@ -314,6 +314,12 @@ function MainApp({ session }: { session: Session }) {
           busy={busy}
           onAccept={() => handleRespond(openSquadData, true)}
           onDecline={() => handleRespond(openSquadData, false)}
+          onGoAhead={() =>
+            withBusy(async () => {
+              await api.voteGoAhead(openSquadData.id);
+              await loadSquads();
+            })
+          }
           onBack={back}
         />
       ) : (

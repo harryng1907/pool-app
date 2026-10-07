@@ -407,13 +407,19 @@ begin
   where status = 'confirmed' and ends_at < now()
     and id in (select squad_id from squad_members where user_id = v_me);
 
+  -- Nobody waits forever: 2 hours before the start, anyone who hasn't answered is dropped.
+  perform pool_settle_squad(s.id, true)
+  from squads s
+  where s.status = 'proposed' and s.starts_at < now() + interval '2 hours'
+    and s.id in (select squad_id from squad_members where user_id = v_me);
+
   return coalesce((
     select jsonb_agg(sq order by rk, starts_at desc)
     from (
       select case s.status when 'proposed' then 0 when 'confirmed' then 1 else 2 end as rk,
              s.starts_at,
              jsonb_build_object(
-               'id', s.id, 'status', s.status, 'my_status', mm.status,
+               'id', s.id, 'status', s.status, 'my_status', mm.status, 'my_go_ahead', mm.go_ahead,
                'starts_at', s.starts_at, 'ends_at', s.ends_at,
                'reasons', s.reasons, 'rebook_of', s.rebook_of,
                'revealed', s.status in ('confirmed','completed'),
@@ -438,13 +444,13 @@ begin
                        'id', p.id, 'name', p.display_name, 'initials', p.initials,
                        'avatar_color', p.avatar_color, 'degree', p.degree, 'degree_short', p.degree_short,
                        'year', p.year, 'status_quote', p.status_quote,
-                       'is_me', m.user_id = v_me, 'status', m.status, 'hidden', false)
+                       'is_me', m.user_id = v_me, 'status', m.status, 'hidden', false, 'go_ahead', m.go_ahead)
                    else
                      jsonb_build_object(
                        'id', null, 'name', p.degree_short || ' student', 'initials', '?',
                        'avatar_color', '#B8C2CC', 'degree', p.degree, 'degree_short', p.degree_short,
                        'year', p.year, 'status_quote', null,
-                       'is_me', false, 'status', m.status, 'hidden', true)
+                       'is_me', false, 'status', m.status, 'hidden', true, 'go_ahead', m.go_ahead)
                    end
                    order by (m.user_id = v_me), m.responded_at nulls last)
                  from squad_members m join profiles p on p.id = m.user_id
@@ -933,4 +939,55 @@ begin
          or not exists (select 1 from squad_members m join profiles p on p.id = m.user_id
                         where m.squad_id = s.id and m.user_id <> v_me and not p.is_seed));
   delete from auth.users where id = v_me;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- "Start with who's here"
+-- ---------------------------------------------------------------------
+
+-- Drop everyone who hasn't answered, then confirm (2+ people) or cancel.
+-- p_force: skip the vote check (used for the 2-hours-before timeout).
+create or replace function public.pool_settle_squad(p_squad uuid, p_force boolean default false)
+returns text language plpgsql security definer set search_path = public as $$
+declare
+  v_accepted int;
+  v_voted int;
+begin
+  select count(*) filter (where status = 'accepted'),
+         count(*) filter (where status = 'accepted' and (go_ahead or (select is_seed from profiles where id = user_id)))
+    into v_accepted, v_voted
+  from squad_members where squad_id = p_squad;
+
+  -- Everyone who said yes has to agree (simulated students always do).
+  if not p_force and v_voted < v_accepted then
+    return 'waiting';
+  end if;
+
+  update squad_members set status = 'declined', responded_at = now()
+  where squad_id = p_squad and status = 'invited';
+
+  if v_accepted >= 2 then
+    update squads set status = 'confirmed' where id = p_squad and status = 'proposed';
+    if found then perform pool_seed_says(p_squad, 'intro'); end if;
+    return 'confirmed';
+  end if;
+  update squads set status = 'cancelled' where id = p_squad and status = 'proposed';
+  return 'cancelled';
+end $$;
+revoke all on function public.pool_settle_squad(uuid, boolean) from public, anon, authenticated;
+
+-- I've said yes — vote to start with whoever has said yes so far.
+create or replace function public.vote_go_ahead(p_squad uuid)
+returns text language plpgsql security definer set search_path = public as $$
+begin
+  update squad_members m set go_ahead = true
+  from squads s
+  where m.squad_id = p_squad and m.user_id = auth.uid() and m.status = 'accepted'
+    and s.id = m.squad_id and s.status = 'proposed';
+  if not found then raise exception 'Say yes to the squad first'; end if;
+
+  if (select count(*) from squad_members where squad_id = p_squad and status = 'accepted') < 2 then
+    raise exception 'You need at least one other person who said yes';
+  end if;
+  return pool_settle_squad(p_squad, false);
 end $$;

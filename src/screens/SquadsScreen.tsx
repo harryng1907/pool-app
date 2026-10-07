@@ -18,6 +18,7 @@ interface SquadsScreenProps {
   onAccept: () => void;
   onDecline: () => void;
   onBack: () => void;
+  onGoAhead: () => void;
 }
 
 // The proposed squad: who (anonymised until everyone accepts), why, when and where.
@@ -27,10 +28,14 @@ export const SquadsScreen: React.FC<SquadsScreenProps> = ({
   onAccept,
   onDecline,
   onBack,
+  onGoAhead,
 }) => {
   const others = squad.members.filter((m) => !m.is_me);
   const waitingOn = others.filter((m) => m.status === 'invited').length;
   const iAccepted = squad.my_status === 'accepted';
+  const accepted = squad.members.filter((m) => m.status === 'accepted');
+  const agreed = accepted.filter((m) => m.go_ahead).length;
+  const canGoAhead = iAccepted && waitingOn > 0 && accepted.length >= 2;
 
   return (
     <ScrollView
@@ -150,12 +155,41 @@ export const SquadsScreen: React.FC<SquadsScreenProps> = ({
 
       <View style={styles.ctaContainer}>
         {iAccepted ? (
-          <View style={styles.waitingBox}>
-            <ActivityIndicator color={THEME.colors.deepTeal} />
-            <Text style={styles.waitingText}>
-              You're in. We'll reveal everyone when the last {waitingOn === 1 ? 'person accepts' : `${waitingOn} accept`}.
+          <>
+            <View style={styles.waitingBox}>
+              <ActivityIndicator color={THEME.colors.deepTeal} />
+              <Text style={styles.waitingText}>
+                You're in. We'll reveal everyone when the last {waitingOn === 1 ? 'person accepts' : `${waitingOn} accept`}.
+              </Text>
+            </View>
+
+            {canGoAhead &&
+              (squad.my_go_ahead ? (
+                <View style={styles.goAheadDone}>
+                  <Ionicons name="hand-left" size={16} color={THEME.colors.successGreen} />
+                  <Text style={styles.goAheadDoneText}>
+                    You voted to start with {accepted.length}. Waiting for the others who said yes ({agreed}/{accepted.length}).
+                  </Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.goAheadBtn, busy && { opacity: 0.6 }]}
+                  onPress={onGoAhead}
+                  disabled={busy}
+                  activeOpacity={0.85}
+                  accessibilityLabel={`Start with the ${accepted.length} of us`}
+                >
+                  <Ionicons name="play" size={18} color="#FFFFFF" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.goAheadText}>Start with the {accepted.length} of us</Text>
+                    <Text style={styles.goAheadSub}>Everyone who said yes has to agree</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            <Text style={styles.timeoutNote}>
+              Anyone who hasn't answered 2 hours before is dropped automatically.
             </Text>
-          </View>
+          </>
         ) : (
           <>
             <TouchableOpacity
@@ -502,5 +536,48 @@ const styles = StyleSheet.create({
     color: THEME.colors.deepTealDark,
     fontWeight: '600',
     lineHeight: 20,
+  },
+  goAheadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: THEME.colors.deepTeal,
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginTop: 10,
+    ...THEME.shadows.buttonTeal,
+  },
+  goAheadText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  goAheadSub: {
+    fontSize: 12,
+    color: '#FFFFFFCC',
+    marginTop: 1,
+  },
+  goAheadDone: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: THEME.colors.successGreenLight,
+    borderRadius: 16,
+    padding: 14,
+    marginTop: 10,
+  },
+  goAheadDoneText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#065F46',
+    lineHeight: 18,
+  },
+  timeoutNote: {
+    fontSize: 11,
+    color: THEME.colors.textMuted,
+    textAlign: 'center',
+    marginTop: 8,
   },
 });

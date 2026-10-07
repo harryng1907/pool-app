@@ -87,6 +87,9 @@ export const getMySquads = () => rpc<Squad[]>('get_my_squads');
 export const respondToSquad = (squadId: string, accept: boolean) =>
   rpc<string>('respond_squad', { p_squad: squadId, p_accept: accept });
 
+/** Vote to start with whoever has said yes. Returns 'confirmed' once everyone who said yes agrees. */
+export const voteGoAhead = (squadId: string) => rpc<string>('vote_go_ahead', { p_squad: squadId });
+
 export const endSession = (squadId: string) => rpc<void>('end_session', { p_squad: squadId });
 
 export const rateSquad = (

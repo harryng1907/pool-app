@@ -44,6 +44,7 @@ export interface SquadMember {
   is_me: boolean;
   status: 'invited' | 'accepted' | 'declined';
   hidden: boolean;
+  go_ahead: boolean;
 }
 
 export type SquadStatus = 'proposed' | 'confirmed' | 'completed' | 'cancelled';
@@ -53,6 +54,7 @@ export interface Squad {
   id: string;
   status: SquadStatus;
   my_status: 'invited' | 'accepted' | 'declined';
+  my_go_ahead: boolean;
   starts_at: string;
   ends_at: string;
   reasons: string[];
