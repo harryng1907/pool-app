@@ -56,7 +56,9 @@ function fromAvailability(me: Me) {
   const cells = new Set<string>();
   for (const a of me.availability) {
     for (const b of TIME_BLOCKS) {
-      if (a.start <= b.start && a.end >= b.end) cells.add(cellKey(a.dow, b.key));
+      // Show a block as picked when at least half of it is free.
+      const overlap = Math.min(a.end, b.end) - Math.max(a.start, b.start);
+      if (overlap >= (b.end - b.start) / 2) cells.add(cellKey(a.dow, b.key));
     }
   }
   return cells;
@@ -385,20 +387,66 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ me, editing,
 
         {step === 3 && (
           <View style={styles.timeGrid}>
+            <View style={styles.bulkRow}>
+              <TouchableOpacity
+                style={styles.bulkBtn}
+                onPress={() => setCells(new Set(WEEK.flatMap((d) => TIME_BLOCKS.map((b) => cellKey(d.dow, b.key)))))}
+                accessibilityLabel="Select all times"
+              >
+                <Ionicons name="checkmark-done" size={16} color={THEME.colors.deepTeal} />
+                <Text style={styles.bulkText}>Select all</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.bulkBtn}
+                onPress={() => setCells(new Set())}
+                accessibilityLabel="Clear all times"
+              >
+                <Ionicons name="close-circle-outline" size={16} color={THEME.colors.textSecondary} />
+                <Text style={[styles.bulkText, { color: THEME.colors.textSecondary }]}>Clear</Text>
+              </TouchableOpacity>
+              <Text style={styles.bulkHint}>Tip: tap a day or time to fill it</Text>
+            </View>
             <View style={styles.timeRow}>
               <View style={styles.dayCell} />
               {TIME_BLOCKS.map((b) => (
-                <View key={b.key} style={styles.blockHead}>
+                // Tap a column header → toggle that time on every day.
+                <TouchableOpacity
+                  key={b.key}
+                  style={styles.blockHead}
+                  onPress={() =>
+                    setCells((x) => {
+                      const keys = WEEK.map((d) => cellKey(d.dow, b.key));
+                      const next = new Set(x);
+                      const allOn = keys.every((k) => x.has(k));
+                      keys.forEach((k) => (allOn ? next.delete(k) : next.add(k)));
+                      return next;
+                    })
+                  }
+                  accessibilityLabel={`Toggle every ${b.label}`}
+                >
                   <Ionicons name={b.icon} size={20} color={THEME.colors.deepTeal} />
                   <Text style={styles.blockHeadText}>{b.label}</Text>
-                </View>
+                </TouchableOpacity>
               ))}
             </View>
             {WEEK.map((d) => (
               <View key={d.dow} style={styles.timeRow}>
-                <View style={styles.dayCell}>
+                {/* Tap a day → toggle the whole day. */}
+                <TouchableOpacity
+                  style={styles.dayCell}
+                  onPress={() =>
+                    setCells((x) => {
+                      const keys = TIME_BLOCKS.map((b) => cellKey(d.dow, b.key));
+                      const next = new Set(x);
+                      const allOn = keys.every((k) => x.has(k));
+                      keys.forEach((k) => (allOn ? next.delete(k) : next.add(k)));
+                      return next;
+                    })
+                  }
+                  accessibilityLabel={`Toggle all of ${d.label}`}
+                >
                   <Text style={styles.dayText}>{d.label}</Text>
-                </View>
+                </TouchableOpacity>
                 {TIME_BLOCKS.map((b) => {
                   const on = cells.has(cellKey(d.dow, b.key));
                   return (
@@ -846,5 +894,33 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  bulkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  bulkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: THEME.radii.pill,
+    backgroundColor: THEME.colors.cardWhite,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+  },
+  bulkText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: THEME.colors.deepTeal,
+  },
+  bulkHint: {
+    flex: 1,
+    fontSize: 11,
+    color: THEME.colors.textMuted,
+    textAlign: 'right',
   },
 });
