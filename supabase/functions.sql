@@ -439,7 +439,9 @@ begin
                'my_checked_in', mm.checked_in_at is not null,
                'starts_at', s.starts_at, 'ends_at', s.ends_at,
                'reasons', s.reasons, 'rebook_of', s.rebook_of,
-               'revealed', s.status in ('confirmed','completed'),
+               'revealed', s.status in ('confirmed','completed') or s.was_confirmed,
+               'was_confirmed', s.was_confirmed,
+               'fixed_time', a.kind = 'session' and not a.is_private and a.host is not null,
                'rated', exists (select 1 from member_ratings r where r.squad_id = s.id and r.rater_id = v_me)
                      or exists (select 1 from venue_ratings r where r.squad_id = s.id and r.rater_id = v_me),
                'activity', jsonb_build_object(
@@ -451,7 +453,7 @@ begin
                'members', (
                  select jsonb_agg(
                    -- Privacy: names, faces and quotes only after everyone has accepted.
-                   case when s.status in ('confirmed','completed') or m.user_id = v_me
+                   case when s.status in ('confirmed','completed') or s.was_confirmed or m.user_id = v_me
                           -- …or you've already met them in a past session
                           or exists (select 1 from squads ps
                                      join squad_members a1 on a1.squad_id = ps.id and a1.user_id = v_me and a1.status = 'accepted'
@@ -508,7 +510,7 @@ begin
     update squads set status = 'cancelled' where id = p_squad and status = 'proposed';
   elsif v_pending = 0 then
     update squads set status = 'confirmed' where id = p_squad and status = 'proposed';
-    if found then perform pool_seed_says(p_squad, 'intro'); end if;
+    if found and not (select was_confirmed from squads where id = p_squad) then perform pool_seed_says(p_squad, 'intro'); end if;
   end if;
 
   select status into v_status from squads where id = p_squad;
@@ -775,8 +777,8 @@ create or replace function public.can_chat(p_squad uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select exists (
     select 1 from squads s join squad_members m on m.squad_id = s.id
-    where s.id = p_squad and s.status in ('confirmed','completed')
-      and m.user_id = auth.uid() and m.status = 'accepted'
+    where s.id = p_squad and (s.status in ('confirmed','completed') or s.was_confirmed)
+      and m.user_id = auth.uid() and m.status <> 'declined'
   );
 $$;
 
@@ -1009,7 +1011,7 @@ begin
 
   if v_accepted >= 2 then
     update squads set status = 'confirmed' where id = p_squad and status = 'proposed';
-    if found then perform pool_seed_says(p_squad, 'intro'); end if;
+    if found and not (select was_confirmed from squads where id = p_squad) then perform pool_seed_says(p_squad, 'intro'); end if;
     return 'confirmed';
   end if;
   update squads set status = 'cancelled' where id = p_squad and status = 'proposed';
@@ -1291,3 +1293,131 @@ create or replace function public.remove_friend(p_user uuid)
 returns void language sql security definer set search_path = public as $$
   delete from friendships where a = least(auth.uid(), p_user) and b = greatest(auth.uid(), p_user);
 $$;
+
+-- ---------------------------------------------------------------------
+-- Join: does this email already have an account? (So we never send a sign-up
+-- email to someone who should just log in.)
+-- ---------------------------------------------------------------------
+create or replace function public.account_exists(p_email text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from auth.users where lower(email) = lower(trim(p_email)));
+$$;
+grant execute on function public.account_exists(text) to anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- Suggest another time
+-- ---------------------------------------------------------------------
+
+-- Free for that window, ignoring this squad itself (it's the one being moved).
+create or replace function public.pool_is_free_except(p_user uuid, p_start timestamptz, p_mins int, p_squad uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  with t as (select p_start at time zone 'Australia/Sydney' as l)
+  select exists (
+    select 1 from availability av, t
+    where av.user_id = p_user
+      and av.dow = extract(dow from t.l)
+      and av.start_hour <= extract(hour from t.l) + extract(minute from t.l) / 60.0
+      and av.end_hour   >= extract(hour from t.l) + extract(minute from t.l) / 60.0 + p_mins / 60.0
+  ) and not exists (
+    select 1 from squad_members m join squads s on s.id = m.squad_id
+    where m.user_id = p_user and m.status <> 'declined' and s.status in ('proposed','confirmed')
+      and s.id <> p_squad
+      and not (select is_seed from profiles where id = p_user)
+      and tstzrange(s.starts_at, s.ends_at) && tstzrange(p_start, p_start + make_interval(mins => p_mins))
+  );
+$$;
+revoke all on function public.pool_is_free_except(uuid, timestamptz, int, uuid) from public, anon, authenticated;
+
+-- Up to 8 other times in the next week, best first: everyone free, then most people free.
+create or replace function public.squad_time_options(p_squad uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_me    uuid := auth.uid();
+  s       squads%rowtype;
+  v_mins  int;
+  v_people uuid[];
+begin
+  if not is_squad_member(p_squad) then raise exception 'not in this squad'; end if;
+  select * into s from squads where id = p_squad;
+  v_mins := greatest(30, (extract(epoch from (s.ends_at - s.starts_at)) / 60)::int);
+  select array_agg(user_id) into v_people from squad_members where squad_id = p_squad and status <> 'declined';
+
+  return coalesce((
+    select jsonb_agg(jsonb_build_object('starts_at', slot, 'free', free, 'total', total,
+                                        'busy', busy) order by free desc, slot)
+    from (
+    select * from (
+      select slot,
+             (select count(*) from unnest(v_people) u where pool_is_free_except(u, slot, v_mins, p_squad)) as free,
+             array_length(v_people, 1) as total,
+             (select coalesce(jsonb_agg(p.display_name), '[]'::jsonb) from unnest(v_people) u join profiles p on p.id = u
+               where not pool_is_free_except(u, slot, v_mins, p_squad)
+                 and (s.status in ('confirmed','completed') or s.was_confirmed or u = v_me)) as busy
+      from (
+        select (d::date + make_time(h, 0, 0)) at time zone 'Australia/Sydney' as slot
+        from generate_series((now() at time zone 'Australia/Sydney')::date,
+                             (now() at time zone 'Australia/Sydney')::date + 7, interval '1 day') d,
+             generate_series(8, 20) h
+      ) slots
+      where slot > now() + interval '2 hours'
+        and slot <> s.starts_at
+        and pool_is_free_except(v_me, slot, v_mins, p_squad)   -- you must be free yourself
+    ) x
+    where free >= 2
+    order by free desc, slot
+    limit 8
+    ) best
+  ), '[]'::jsonb);
+end $$;
+
+-- Move the squad to a new time. Everyone else re-confirms (simulated students agree straight away).
+create or replace function public.propose_time(p_squad uuid, p_at timestamptz)
+returns text language plpgsql security definer set search_path = public as $$
+declare
+  v_me   uuid := auth.uid();
+  s      squads%rowtype;
+  a      activities%rowtype;
+  v_name text;
+  v_mins int;
+begin
+  if not exists (select 1 from squad_members where squad_id = p_squad and user_id = v_me and status <> 'declined') then
+    raise exception 'not in this squad';
+  end if;
+  select * into s from squads where id = p_squad;
+  select * into a from activities where id = s.activity_id;
+  if s.status not in ('proposed', 'confirmed') then raise exception 'This squad can''t be moved any more'; end if;
+  if a.kind = 'session' and not a.is_private and a.host is not null then
+    raise exception 'Society events have a fixed time';
+  end if;
+  if p_at <= now() + interval '1 hour' then raise exception 'Pick a time at least an hour from now'; end if;
+  v_mins := (extract(epoch from (s.ends_at - s.starts_at)) / 60)::int;
+  select display_name into v_name from profiles where id = v_me;
+
+  update squads set
+    starts_at = p_at,
+    ends_at = p_at + make_interval(mins => v_mins),
+    was_confirmed = was_confirmed or status = 'confirmed',
+    status = 'proposed',
+    created_at = now(),  -- fresh answer-by window for the new time
+    reasons = array_prepend(format('New time suggested by %s', v_name),
+                            array(select r from unnest(reasons) r where r not like 'New time suggested by %'))
+  where id = p_squad;
+
+  update squad_members m set
+    status = case when m.user_id = v_me or (select is_seed from profiles where id = m.user_id) then 'accepted' else 'invited' end,
+    responded_at = case when m.user_id = v_me or (select is_seed from profiles where id = m.user_id) then now() end,
+    go_ahead = false
+  where m.squad_id = p_squad and m.status <> 'declined';
+
+  if can_chat(p_squad) then
+    insert into messages (squad_id, user_id, body)
+    values (p_squad, v_me, format('🕒 Can we move it to %s? Tap "Looks good" if that works.',
+                                  to_char(p_at at time zone 'Australia/Sydney', 'FMDy FMDD Mon, FMHH12:MI AM')));
+  end if;
+
+  -- Everyone else already agreed (e.g. only simulated squad-mates)? Confirm straight away.
+  if not exists (select 1 from squad_members where squad_id = p_squad and status = 'invited') then
+    update squads set status = 'confirmed' where id = p_squad;
+  end if;
+  return (select status from squads where id = p_squad);
+end $$;

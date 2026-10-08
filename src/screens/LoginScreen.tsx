@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { THEME } from '../theme';
 import {
+  AccountExistsError,
   DEMO_ACCOUNTS,
   isUnswEmail,
   signIn,
@@ -80,6 +81,7 @@ export const LoginScreen: React.FC = () => {
         await signIn(email, password);
       }
     } catch (e) {
+      if (e instanceof AccountExistsError) setMode('login'); // keep the email + password, just switch tabs
       setError(e instanceof Error ? e.message : 'Something went wrong');
     } finally {
       setPending(null);

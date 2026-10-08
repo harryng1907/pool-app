@@ -106,6 +106,7 @@ create table public.squads (
   reasons      text[] not null default '{}',
   ai_reason    text,   -- one sentence written by Claude from everyone's own words
   rebook_of    uuid references public.squads(id) on delete set null,
+  was_confirmed boolean not null default false,  -- was confirmed, now re-confirming a new time
   created_by   uuid references public.profiles(id) on delete set null,
   created_at   timestamptz not null default now()
 );

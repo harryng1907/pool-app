@@ -3,7 +3,7 @@
 import { Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from './supabase';
-import { ActivityCard, ActivityInput, Connection, Me, Message, Metrics, Nudge, PlanOption, ProfileInput, Squad } from '../types';
+import { ActivityCard, ActivityInput, Connection, Me, Message, Metrics, Nudge, PlanOption, ProfileInput, Squad, TimeOption } from '../types';
 
 async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.rpc(fn, args);
@@ -29,8 +29,13 @@ const UNSW_EMAIL = /@([a-z0-9-]+\.)*unsw\.edu\.au$/i;
 export const isUnswEmail = (email: string) => UNSW_EMAIL.test(email.trim());
 
 /** Create an account. Returns true if signed in straight away, false if a confirmation email was sent. */
+export class AccountExistsError extends Error {}
+
 export async function signUp(email: string, password: string): Promise<boolean> {
   if (!isUnswEmail(email)) throw new Error('Use your UNSW email (e.g. z1234567@ad.unsw.edu.au)');
+  // Already have an account? Don't send another sign-up email — log in instead.
+  const { data: exists } = await supabase.rpc('account_exists', { p_email: email.trim() });
+  if (exists) throw new AccountExistsError('You already have an account with this email — log in instead.');
   const { data, error } = await supabase.auth.signUp({
     email: email.trim(),
     password,
@@ -181,6 +186,12 @@ export async function requestAiReason(squadId: string): Promise<string | null> {
   if (error || !data?.reason) return null;
   return data.reason as string;
 }
+
+/** Other times this week, best first (everyone free → most free). */
+export const getTimeOptions = (squadId: string) => rpc<TimeOption[]>('squad_time_options', { p_squad: squadId });
+
+/** Move the squad to a new time; everyone else is asked to OK it. Returns the squad status. */
+export const proposeTime = (squadId: string, at: string) => rpc<string>('propose_time', { p_squad: squadId, p_at: at });
 
 export const endSession = (squadId: string) => rpc<void>('end_session', { p_squad: squadId });
 

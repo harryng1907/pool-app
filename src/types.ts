@@ -65,6 +65,8 @@ export interface Squad {
   reasons: string[];
   rebook_of: string | null;
   revealed: boolean;
+  was_confirmed: boolean;
+  fixed_time: boolean; // society events can't be moved
   rated: boolean;
   activity: {
     id: string;
@@ -207,4 +209,12 @@ export interface PlanTarget {
   userIds: string[];
   names: string[];
   rebookOf: string | null;
+}
+
+// From squad_time_options
+export interface TimeOption {
+  starts_at: string;
+  free: number;
+  total: number;
+  busy: string[]; // names that can't make it (only shown once names are revealed)
 }
