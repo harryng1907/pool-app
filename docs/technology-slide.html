@@ -9,7 +9,7 @@
   @font-face { font-family: Ionicons; src: url(Ionicons.ttf); }
   :root {
     --navy: #03182A; --navy2: #0A2742; --card: #0F2D4A; --line: #1D4466;
-    --orange: #F4601F; --orange2: #F48222; --teal: #0C9A93; --mint: #8FE3DC;
+    --orange: #F4601F; --orange2: #F48222; --teal: #0C9A93; --mint: #8FE3DC; --blue: #5AA9FF;
     --cream: #FAF7F2; --muted: #9FB3C8; --body: #C9D6E3;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -23,157 +23,153 @@
   h1 em { font-style: normal; color: var(--orange2); }
   .sub { font-size: 21px; color: var(--muted); margin-top: 10px; }
 
-  .label { font-family: Montserrat; font-weight: 800; font-size: 15px; letter-spacing: 3px; color: var(--muted); }
+  /* ---------- the flow ---------- */
+  .flow { position: absolute; left: 70px; right: 70px; top: 236px; height: 524px; display: flex; align-items: stretch; }
+  .layer { flex: 1; background: var(--card); border: 2px solid var(--line); border-radius: 28px; padding: 26px 28px;
+    display: flex; flex-direction: column; position: relative; }
+  .layer.front { border-color: var(--orange); }
+  .layer.back { border-color: var(--teal); }
+  .layer.db { border-color: var(--blue); }
+  .tag { font-family: Montserrat; font-weight: 800; font-size: 15px; letter-spacing: 3px; }
+  .front .tag { color: var(--orange2); } .back .tag { color: var(--mint); } .db .tag { color: var(--blue); }
+  .head { display: flex; align-items: center; gap: 16px; margin-top: 12px; }
+  .badge { width: 64px; height: 64px; border-radius: 18px; display: flex; align-items: center; justify-content: center;
+    font-size: 34px; color: #fff; flex: none; }
+  .front .badge { background: var(--orange); } .back .badge { background: var(--teal); } .db .badge { background: #2F7BD6; }
+  .head h2 { font-family: Montserrat; font-weight: 900; font-size: 30px; line-height: 1.1; }
+  .head p { font-size: 16px; color: var(--muted); margin-top: 3px; }
+  .stack { margin-top: 18px; display: grid; gap: 10px; }
+  .row { display: flex; align-items: flex-start; gap: 12px; background: rgba(3,24,42,.55); border-radius: 14px; padding: 12px 14px; }
+  .row .i { font-size: 22px; margin-top: 1px; flex: none; width: 24px; text-align: center; }
+  .front .row .i { color: var(--orange2); } .back .row .i { color: var(--mint); } .db .row .i { color: var(--blue); }
+  .row b { font-family: Montserrat; font-weight: 800; font-size: 17px; color: #fff; }
+  .row div { font-size: 15px; color: var(--body); line-height: 1.38; }
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: auto; padding-top: 14px; }
+  .chip { padding: 5px 11px; border-radius: 14px; background: var(--navy2); border: 1px solid var(--line);
+    font-size: 13.5px; font-weight: 700; color: #DCE6F0; }
+  .chiplabel { font-family: Montserrat; font-weight: 800; font-size: 12.5px; letter-spacing: 2px; color: var(--muted); margin-top: auto; padding-top: 12px; }
+  .chiplabel + .chips { margin-top: 0; padding-top: 8px; }
 
-  /* ---------- architecture (left) ---------- */
-  .arch { position: absolute; left: 70px; top: 248px; width: 1060px; }
-  .flow { display: flex; align-items: stretch; gap: 0; margin-top: 16px; }
-  .box { background: var(--card); border: 2px solid var(--line); border-radius: 24px; padding: 22px; }
-  .box h2 { font-family: Montserrat; font-weight: 800; font-size: 24px; display: flex; align-items: center; gap: 12px; }
-  .box h2 .i { font-size: 30px; color: var(--orange2); }
-  .box p { font-size: 16.5px; line-height: 1.45; color: var(--body); margin-top: 10px; }
-  .box p b { color: #fff; }
-  .user { width: 200px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-  .user .devices { font-size: 46px; color: var(--orange2); display: flex; gap: 8px; }
-  .user h2 { justify-content: center; margin-top: 10px; font-size: 22px; }
-  .app { width: 300px; }
-  .supa { flex: 1; border-color: var(--teal); background: linear-gradient(180deg, #0D3445 0%, #0F2D4A 100%); }
-  .supa h2 .i { color: var(--teal); }
-  .link { width: 62px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-    color: var(--orange2); }
-  .link .i { font-size: 30px; }
-  .link span { font-size: 12.5px; font-weight: 700; color: var(--muted); text-align: center; line-height: 1.2; }
-  .tag { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; margin-right: 6px; padding: 5px 11px;
-    border-radius: 20px; background: rgba(244,130,34,.14); color: #F9C9A8; font-size: 14px; font-weight: 700; }
-  .tag .i { font-size: 15px; }
-  .layers { display: grid; gap: 10px; margin-top: 14px; }
-  .layer { display: flex; gap: 12px; align-items: flex-start; background: rgba(3,24,42,.55); border-radius: 14px; padding: 11px 14px; }
-  .layer .i { font-size: 22px; color: var(--mint); margin-top: 2px; }
-  .layer b { font-family: Montserrat; font-weight: 800; font-size: 16.5px; color: #fff; }
-  .layer div { font-size: 15px; color: var(--body); line-height: 1.4; }
-
-  .fns { margin-top: 16px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-  .fn { display: flex; align-items: center; gap: 9px; background: var(--navy2); border: 1.5px solid var(--line); border-radius: 14px;
-    padding: 11px 13px; font-size: 15.5px; font-weight: 700; color: #fff; }
-  .fn .i { font-size: 19px; color: var(--orange2); }
-  .fn small { display: block; font-weight: 600; font-size: 13px; color: var(--muted); }
-
-  /* ---------- matching engine (right) ---------- */
-  .engine { position: absolute; left: 1170px; top: 248px; width: 680px; background: var(--card);
-    border: 2px solid var(--orange); border-radius: 26px; padding: 26px 28px; box-shadow: 0 0 0 6px rgba(244,96,31,.12); }
-  .engine h2 { font-family: Montserrat; font-weight: 900; font-size: 28px; display: flex; align-items: center; gap: 12px; }
-  .engine h2 .badge { width: 46px; height: 46px; border-radius: 14px; background: var(--orange); display: flex;
-    align-items: center; justify-content: center; font-size: 26px; color: #fff; }
-  .engine .lead { font-size: 16.5px; color: var(--body); margin-top: 8px; }
-  .steps { display: grid; gap: 9px; margin-top: 14px; }
-  .step { display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: start; }
-  .step .n { width: 34px; height: 34px; border-radius: 50%; background: rgba(244,130,34,.18); color: var(--orange2);
-    font-family: Montserrat; font-weight: 900; font-size: 16px; display: flex; align-items: center; justify-content: center; }
-  .step b { font-family: Montserrat; font-weight: 800; font-size: 17px; color: #fff; }
-  .step div { font-size: 15px; color: var(--body); line-height: 1.42; }
-  .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 7px; }
-  .chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 16px; background: var(--navy2);
-    border: 1px solid var(--line); font-size: 13.5px; font-weight: 700; color: #DCE6F0; }
-  .chip .i { font-size: 14px; color: var(--orange2); }
-  .ready { margin-top: 16px; display: flex; gap: 12px; align-items: center;
-    border: 1.5px dashed rgba(12,154,147,.8); background: rgba(12,154,147,.1); border-radius: 14px; padding: 11px 14px;
-    font-size: 15px; color: var(--mint); }
-  .ready .i { font-size: 22px; }
-  .ready b { color: #fff; }
+  .arrow { width: 92px; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+  .arrow .i { font-size: 40px; color: var(--orange2); }
+  .arrow span { font-size: 13px; font-weight: 700; color: var(--muted); text-align: center; line-height: 1.3; }
 
   /* ---------- bottom ---------- */
-  .base { position: absolute; left: 70px; right: 70px; top: 840px; height: 186px; display: flex; gap: 22px; }
-  .pill { flex: 1; background: var(--navy2); border: 2px solid var(--line); border-radius: 22px; padding: 20px 24px; }
+  .base { position: absolute; left: 70px; right: 70px; top: 800px; height: 180px; display: flex; gap: 22px; }
+  .pill { background: var(--navy2); border: 2px solid var(--line); border-radius: 22px; padding: 20px 24px; }
   .pill h3 { font-family: Montserrat; font-weight: 800; font-size: 19px; display: flex; align-items: center; gap: 10px; }
-  .pill h3 .i { font-size: 23px; color: var(--teal); }
-  .pill p { font-size: 16px; line-height: 1.45; color: var(--body); margin-top: 9px; }
+  .pill h3 .i { font-size: 22px; color: var(--orange2); }
+  .pill p { font-size: 15.5px; line-height: 1.45; color: var(--body); margin-top: 9px; }
   .pill p b { color: #fff; }
-  .pill.ai { border-color: rgba(244,130,34,.6); }
-  .pill.ai h3 .i { color: var(--orange2); }
+  .ship { flex: 1.05; }
+  .road { flex: 1.6; border-color: rgba(244,130,34,.55); }
+  .ai { flex: 1; }
+  .steps { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+  .step { flex: 1; border-radius: 16px; padding: 12px 14px; background: rgba(3,24,42,.6); border: 1.5px solid var(--line); }
+  .step.now { border-color: var(--teal); }
+  .step.next { border-color: var(--orange2); border-style: dashed; }
+  .step .when { font-family: Montserrat; font-weight: 800; font-size: 12.5px; letter-spacing: 2px; }
+  .step.now .when { color: var(--mint); } .step.next .when { color: var(--orange2); }
+  .step .what { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-family: Montserrat; font-weight: 800; font-size: 17px; color: #fff; }
+  .step .what .i { font-size: 22px; }
+  .step .how { font-size: 13.5px; color: var(--body); margin-top: 3px; }
+  .steps > .i { font-size: 28px; color: var(--orange2); }
 </style>
 </head>
 <body>
   <header>
     <div class="kicker">TECHNOLOGY</div>
-    <h1>A real product stack — <em>logic lives next to the data</em></h1>
-    <div class="sub">One codebase on every device, one secure database that runs the matching, privacy and metrics.</div>
+    <h1>How Pool is built — <em>from your phone to the database</em></h1>
+    <div class="sub">Three layers, one codebase, no servers to babysit.</div>
   </header>
 
-  <!-- Architecture -->
-  <section class="arch">
-    <div class="label">ARCHITECTURE</div>
-    <div class="flow">
-      <div class="box user">
-        <div class="devices"><i class="i">&#62644;</i><i class="i">&#62380;</i></div>
-        <h2>Students</h2>
-        <p>Any phone or laptop. Add to home screen — no app store.</p>
+  <div class="flow">
+    <!-- FRONTEND -->
+    <section class="layer front">
+      <div class="tag">FRONTEND</div>
+      <div class="head">
+        <div class="badge"><i class="i">&#62644;</i></div>
+        <div><h2>The app</h2><p>What students see and tap</p></div>
       </div>
-      <div class="link"><i class="i">&#61747;</i><span>HTTPS</span></div>
-      <div class="box app">
-        <h2><i class="i">&#62476;</i>The app</h2>
-        <p><b>Expo + React Native</b> in TypeScript. One codebase for web, iOS and Android.</p>
-        <span class="tag"><i class="i">&#62495;</i>Hosted on Vercel</span>
-        <span class="tag"><i class="i">&#62451;</i>Auto-deploys from GitHub</span>
+      <div class="stack">
+        <div class="row"><i class="i">&#62476;</i><div><b>React Native + Expo</b><br/>One codebase → iPhone, Android and web</div></div>
+        <div class="row"><i class="i">&#62062;</i><div><b>TypeScript</b><br/>Typed screens, components and API calls</div></div>
+        <div class="row"><i class="i">&#62383;</i><div><b>UI kit</b><br/>Ionicons, gradient covers, swipe gestures</div></div>
       </div>
-      <div class="link"><i class="i">&#61747;</i><span>API</span></div>
-      <div class="box supa">
-        <h2><i class="i">&#62824;</i>Supabase backend</h2>
-        <div class="layers">
-          <div class="layer"><i class="i">&#62371;</i><div><b>Auth</b> — UNSW-only email sign-up with verification, guest accounts</div></div>
-          <div class="layer"><i class="i">&#62824;</i><div><b>PostgreSQL</b> — profiles, swipes, squads, ratings, chat, events</div></div>
-          <div class="layer"><i class="i">&#62407;</i><div><b>Row-level security</b> — the database blocks reading anyone else's profile</div></div>
+      <div class="chiplabel">SCREENS</div>
+      <div class="chips">
+        <span class="chip">Swipe deck</span><span class="chip">Onboarding</span><span class="chip">Squads</span>
+        <span class="chip">Chat</span><span class="chip">Rate</span><span class="chip">Profile</span><span class="chip">Metrics</span>
+      </div>
+    </section>
+
+    <div class="arrow"><i class="i">&#61747;</i><span>HTTPS<br/>supabase-js</span></div>
+
+    <!-- BACKEND -->
+    <section class="layer back">
+      <div class="tag">BACKEND</div>
+      <div class="head">
+        <div class="badge"><i class="i">&#62230;</i></div>
+        <div><h2>Supabase</h2><p>Login, API and the matching logic</p></div>
+      </div>
+      <div class="stack">
+        <div class="row"><i class="i">&#62371;</i><div><b>Auth</b><br/>UNSW email, Microsoft (UNSW) sign-in, guests</div></div>
+        <div class="row"><i class="i">&#62896;</i><div><b>Instant API</b><br/>The app calls database functions directly — no custom server</div></div>
+        <div class="row"><i class="i">&#62860;</i><div><b>Logic as SQL functions</b><br/>Runs right next to the data</div></div>
+      </div>
+      <div class="chiplabel">FUNCTIONS</div>
+      <div class="chips">
+        <span class="chip">Matching engine</span><span class="chip">Scheduler</span><span class="chip">Re-match</span>
+        <span class="chip">Chat &amp; check-in</span><span class="chip">Live metrics</span>
+      </div>
+    </section>
+
+    <div class="arrow"><i class="i">&#61747;</i><span>SQL</span></div>
+
+    <!-- DATABASE -->
+    <section class="layer db">
+      <div class="tag">DATABASE</div>
+      <div class="head">
+        <div class="badge"><i class="i">&#62824;</i></div>
+        <div><h2>PostgreSQL</h2><p>Every swipe, squad and rating</p></div>
+      </div>
+      <div class="stack">
+        <div class="row"><i class="i">&#62104;</i><div><b>Hosted Postgres</b><br/>Managed by Supabase, backed up</div></div>
+        <div class="row"><i class="i">&#62923;</i><div><b>pg_trgm</b><br/>Compares how people describe themselves</div></div>
+        <div class="row"><i class="i">&#62875;</i><div><b>Events + timestamps</b><br/>Funnel, cohorts and churn from real data</div></div>
+      </div>
+      <div class="chiplabel">TABLES</div>
+      <div class="chips">
+        <span class="chip">profiles</span><span class="chip">activities</span><span class="chip">swipes</span><span class="chip">squads</span>
+        <span class="chip">ratings</span><span class="chip">messages</span><span class="chip">venues</span><span class="chip">events</span>
+      </div>
+    </section>
+  </div>
+
+  <div class="base">
+    <div class="pill ship">
+      <h3><i class="i">&#62451;</i>How we ship</h3>
+      <p>Code on <b>GitHub</b> → every push auto-deploys to <b>Vercel</b> in ~2 minutes. Database changes are versioned SQL files.</p>
+    </div>
+    <div class="pill road">
+      <h3><i class="i">&#62791;</i>From web app to app stores</h3>
+      <div class="steps">
+        <div class="step now">
+          <div class="when">TODAY</div>
+          <div class="what"><i class="i">&#62287;</i>Web app on Vercel</div>
+          <div class="how">Scan a QR, add to home screen — no install</div>
+        </div>
+        <i class="i">&#61747;</i>
+        <div class="step next">
+          <div class="what" style="margin-top:0"><i class="i">&#62424;</i><i class="i">&#62454;</i>App Store &amp; Google Play</div>
+          <div class="when" style="margin-top:6px">NEXT · SAME CODE</div>
+          <div class="how">Built with Expo EAS — no rewrite</div>
         </div>
       </div>
     </div>
-
-    <div class="fns">
-      <div class="fn"><i class="i">&#62860;</i><span>Matcher<small>scores &amp; forms squads</small></span></div>
-      <div class="fn"><i class="i">&#61903;</i><span>Scheduler<small>common free time + venue</small></span></div>
-      <div class="fn"><i class="i">&#62183;</i><span>Privacy reveal<small>names only after all say yes</small></span></div>
-      <div class="fn"><i class="i">&#62767;</i><span>Ratings → re-match<small>plan again, avoid bad venues</small></span></div>
-      <div class="fn"><i class="i">&#61975;</i><span>Squad chat &amp; check-in<small>members only</small></span></div>
-      <div class="fn"><i class="i">&#62875;</i><span>Live metrics<small>funnel, cohorts, churn</small></span></div>
-    </div>
-  </section>
-
-  <!-- Matching engine -->
-  <section class="engine">
-    <h2><span class="badge"><i class="i">&#62860;</i></span>The matching engine</h2>
-    <div class="lead">An explainable recommendation system — works from the very first user, no training data needed.</div>
-    <div class="steps">
-      <div class="step"><span class="n">1</span><div><b>Scores everyone who fits</b>
-        <div class="chips">
-          <span class="chip"><i class="i">&#62812;</i>Shared courses</span>
-          <span class="chip"><i class="i">&#62314;</i>Shared hobbies</span>
-          <span class="chip"><i class="i">&#62923;</i>Similar own words</span>
-          <span class="chip"><i class="i">&#62299;</i>Said “I'm in” too</span>
-          <span class="chip"><i class="i">&#62869;</i>Past ratings</span>
-        </div></div></div>
-      <div class="step"><span class="n">2</span><div><b>Applies hard rules</b><br/>Same squad-size preference, no reports, nobody rated ≤2★, actually free.</div></div>
-      <div class="step"><span class="n">3</span><div><b>Solves the when &amp; where</b><br/>Earliest time everyone is free this week, at a public venue nobody rated badly.</div></div>
-      <div class="step"><span class="n">4</span><div><b>Explains every match</b><br/>“3 of you take COMP1511 · everyone is free Thu 2pm · you rated Mei 5★”.</div></div>
-      <div class="step"><span class="n">5</span><div><b>Learns from feedback</b><br/>Swipes re-rank the deck; ratings steer who and where you're matched next.</div></div>
-    </div>
-    <div class="ready"><i class="i">&#62695;</i><div><b>Claude-ready:</b> an integration that writes natural-language match explanations is built and switches on for the pilot.</div></div>
-  </section>
-
-  <!-- Decisions + AI to build -->
-  <div class="base">
-    <div class="pill">
-      <h3><i class="i">&#62824;</i>Why logic in the database</h3>
-      <p>Matching, privacy and scheduling run as <b>SQL functions</b> next to the data — one source of truth, nothing secret on the phone.</p>
-    </div>
-    <div class="pill">
-      <h3><i class="i">&#62380;</i>Why a web app first</h3>
-      <p><b>No app-store wait</b>, works on any phone from a QR code, and the same code can ship to iOS / Android later.</p>
-    </div>
-    <div class="pill">
-      <h3><i class="i">&#62840;</i>Why explainable scoring</h3>
-      <p>Every match says <b>why</b> — important for trust with shy students, and it needs no training data at launch.</p>
-    </div>
     <div class="pill ai">
       <h3><i class="i">&#62062;</i>Built with AI</h3>
-      <p><b>Claude Code</b> as a co-developer for code, database and tests — the team owned research, product decisions and user testing.</p>
+      <p><b>Claude Code</b> as a co-developer for code, database and tests. The team owned research, design decisions and user testing.</p>
     </div>
   </div>
 </body>
