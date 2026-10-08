@@ -99,11 +99,11 @@ export async function signInGuest() {
 export async function deleteAccount() {
   const { error } = await supabase.rpc('delete_my_account');
   if (error) throw new Error(error.message);
-  await supabase.auth.signOut();
+  await supabase.auth.signOut({ scope: 'local' }); // this device only
 }
 
 export async function signOut() {
-  await supabase.auth.signOut();
+  await supabase.auth.signOut({ scope: 'local' }); // this device only
 }
 
 // --- Profile ----------------------------------------------------------

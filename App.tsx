@@ -74,12 +74,20 @@ function MainApp({ session }: { session: Session }) {
     setLoading(true);
     try {
       const [m, d] = await Promise.all([api.getMe(), api.getDeck(), loadSquads()]);
-      if (!m) {
-        // Saved login points at an account that no longer exists (e.g. demo data was re-seeded).
-        await api.signOut();
+      let profile = m;
+      if (!profile) {
+        // Usually a hiccup while the login refreshes after a reload — try once more before giving up.
+        await supabase.auth.refreshSession().catch(() => {});
+        profile = await api.getMe().catch(() => null);
+      }
+      if (!profile) {
+        // Only sign out if the account itself is gone (e.g. deleted, or demo data re-seeded).
+        const { error } = await supabase.auth.getUser();
+        if (error) await api.signOut();
+        else setNotice("Couldn't load your profile — pull down or tap Refresh.");
         return;
       }
-      setMe(m);
+      setMe(profile);
       setCards(d);
     } catch (e) {
       setNotice(errorText(e));
