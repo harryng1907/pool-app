@@ -10,6 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { THEME } from '../theme';
 import { Squad } from '../types';
+import { AvatarPhoto } from '../components/AvatarPhoto';
 import { formatDate, formatDuration, formatRange, formatWhen, SQUAD_TYPE_LABEL, yearLabel } from '../lib/format';
 
 interface ConfirmedScreenProps {
@@ -161,6 +162,7 @@ export const ConfirmedScreen: React.FC<ConfirmedScreenProps> = ({
             >
               <View style={[styles.memberAvatar, { backgroundColor: member.avatar_color }]}>
                 <Text style={styles.memberAvatarInitials}>{member.initials}</Text>
+                <AvatarPhoto url={member.avatar_url} />
                 <View style={styles.verifiedCheckBadge}>
                   <Ionicons name="checkmark" size={9} color="#FFFFFF" />
                 </View>

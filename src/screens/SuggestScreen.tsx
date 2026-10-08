@@ -18,6 +18,7 @@ type IconName = keyof typeof Ionicons.glyphMap;
 interface SuggestScreenProps {
   busy: boolean;
   onSubmit: (input: ActivityInput) => void;
+  withNames?: string[]; // set when planning privately with friends
 }
 
 const ICONS: IconName[] = [
@@ -44,7 +45,8 @@ const PLACES: { key: Category; label: string; icon: IconName }[] = [
 const DURATIONS = [60, 90, 120, 180];
 
 // Suggest an activity. Nobody "hosts": it becomes a card, and the matcher builds the squad.
-export const SuggestScreen: React.FC<SuggestScreenProps> = ({ busy, onSubmit }) => {
+export const SuggestScreen: React.FC<SuggestScreenProps> = ({ busy, onSubmit, withNames }) => {
+  const who = withNames?.join(' & ');
   const [icon, setIcon] = useState<IconName>('cafe');
   const [title, setTitle] = useState('');
   const [type, setType] = useState<SquadType>('hobby');
@@ -66,7 +68,7 @@ export const SuggestScreen: React.FC<SuggestScreenProps> = ({ busy, onSubmit }) 
           <Ionicons name={icon} size={28} color={THEME.colors.primaryOrange} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.previewLabel}>STUDENT IDEA</Text>
+          <Text style={styles.previewLabel}>{who ? `PRIVATE PLAN WITH ${who.toUpperCase()}` : 'STUDENT IDEA'}</Text>
           <Text style={styles.previewTitle} numberOfLines={2}>
             {title.trim() || 'Your activity'}
           </Text>
@@ -159,7 +161,11 @@ export const SuggestScreen: React.FC<SuggestScreenProps> = ({ busy, onSubmit }) 
 
       <View style={styles.note}>
         <Ionicons name="sparkles" size={14} color={THEME.colors.deepTeal} />
-        <Text style={styles.noteText}>You won't host. We find people who'd be into it and a time you're all free.</Text>
+        <Text style={styles.noteText}>
+          {who
+            ? `Only ${who} will see this. We'll find a time you're all free and a public spot.`
+            : "You won't host. We find people who'd be into it and a time you're all free."}
+        </Text>
       </View>
 
       <TouchableOpacity
@@ -182,7 +188,7 @@ export const SuggestScreen: React.FC<SuggestScreenProps> = ({ busy, onSubmit }) 
           <ActivityIndicator color="#FFFFFF" />
         ) : (
           <>
-            <Text style={styles.submitText}>Post & find my squad</Text>
+            <Text style={styles.submitText}>{who ? `Send to ${who}` : 'Post & find my squad'}</Text>
             <Ionicons name="sparkles" size={18} color="#FFFFFF" />
           </>
         )}

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator
 import { Ionicons } from '@expo/vector-icons';
 import { THEME } from '../theme';
 import { Squad } from '../types';
+import { AvatarPhoto } from '../components/AvatarPhoto';
 
 interface RateScreenProps {
   squad: Squad;
@@ -56,6 +57,7 @@ export const RateScreen: React.FC<RateScreenProps> = ({ squad, busy, onSubmit, o
           <View style={styles.personRow}>
             <View style={[styles.avatar, { backgroundColor: m.avatar_color }]}>
               <Text style={styles.avatarText}>{m.initials}</Text>
+              <AvatarPhoto url={m.avatar_url} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.name}>{m.name}</Text>

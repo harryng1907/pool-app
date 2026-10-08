@@ -48,6 +48,7 @@ function MainApp({ session }: { session: Session }) {
   const [editingProfile, setEditingProfile] = useState(false);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [planTarget, setPlanTarget] = useState<PlanTarget | null>(null);
+  const [suggestFor, setSuggestFor] = useState<PlanTarget | null>(null); // private plan with friends
 
   // Ask Claude for a "why you matched" sentence once per squad; the app works fine without it.
   const aiRequested = useRef(new Set<string>());
@@ -185,7 +186,18 @@ function MainApp({ session }: { session: Session }) {
     );
 
   const handleSuggest = (input: ActivityInput) =>
-    matchThen(
+    suggestFor
+      ? matchThen(
+          [input.title, ...suggestFor.names],
+          async () => {
+            const made = await api.createActivity({ ...input, private: true });
+            const squadId = await api.planWith(made.activity_id, suggestFor.userIds, null, suggestFor.rebookOf);
+            setSuggestFor(null);
+            return squadId;
+          },
+          `Couldn't find a time this week when you and ${suggestFor.names.join(' & ')} are all free — try adding more free times.`,
+        )
+      : matchThen(
       [input.title, ...input.tags],
       async () => {
         const res = await api.createActivity(input);
@@ -285,7 +297,7 @@ function MainApp({ session }: { session: Session }) {
   const showBack = ['squad', 'rate', 'metrics', 'chat', 'suggest', 'plan'].includes(screen);
   const back = () =>
     screen === 'metrics' ? go('profile', 'profile')
-    : screen === 'suggest' ? go('discover', 'discover')
+    : screen === 'suggest' ? (suggestFor ? go(activeTab, 'plan') : go('discover', 'discover'))
     : screen === 'plan' ? go(activeTab, activeTab === 'profile' ? 'profile' : 'discover')
     : screen === 'chat' ? go('squads', 'squad', openSquadId)
     : go('squads', 'squads');
@@ -303,7 +315,10 @@ function MainApp({ session }: { session: Session }) {
         onNotForMe={handleNotForMe}
         onRebook={handleRebook}
         onRefresh={loadAll}
-        onSuggest={() => go('discover', 'suggest')}
+        onSuggest={() => {
+          setSuggestFor(null);
+          go('discover', 'suggest');
+        }}
       />
     );
   } else if (screen === 'squads') {
@@ -349,9 +364,19 @@ function MainApp({ session }: { session: Session }) {
         />
       );
   } else if (screen === 'plan' && planTarget) {
-    body = <PlanScreen target={planTarget} busy={busy} onPick={handlePick} />;
+    body = (
+      <PlanScreen
+        target={planTarget}
+        busy={busy}
+        onPick={handlePick}
+        onCreateOwn={() => {
+          setSuggestFor(planTarget);
+          go(activeTab, 'suggest');
+        }}
+      />
+    );
   } else if (screen === 'suggest') {
-    body = <SuggestScreen busy={busy} onSubmit={handleSuggest} />;
+    body = <SuggestScreen busy={busy} onSubmit={handleSuggest} withNames={suggestFor?.names} />;
   } else if (screen === 'chat' && openSquadData) {
     body = <ChatScreen squad={openSquadData} />;
   } else if (screen === 'rate' && openSquadData) {
@@ -374,6 +399,17 @@ function MainApp({ session }: { session: Session }) {
         connections={connections}
         onInvite={handleInvite}
         onDeleteAccount={() => withBusy(() => api.deleteAccount())}
+        onChangePhoto={() =>
+          withBusy(async () => {
+            const updated = await api.pickAndUploadAvatar();
+            if (updated) setMe(updated);
+          })
+        }
+        onAddFriend={async (code) => {
+          const friend = await api.addFriend(code);
+          await loadSquads();
+          return friend.name;
+        }}
         onToggleRealOnly={(value) =>
           withBusy(async () => {
             setMe(await api.saveProfile({ real_only: value }));
@@ -408,6 +444,7 @@ function MainApp({ session }: { session: Session }) {
         showBack={showBack}
         initials={me?.initials}
         avatarColor={me?.avatar_color}
+        avatarUrl={me?.avatar_url}
       />
       <View style={styles.screenContainer}>{body}</View>
       <MatchingOverlay visible={matching} tags={matchingTags} />

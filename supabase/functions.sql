@@ -110,6 +110,7 @@ begin
           and not (me.real_only and (select is_seed from profiles where id = s.user_id))
       ) ic
       where not exists (select 1 from swipes s where s.activity_id = a.id and s.user_id = v_me)
+        and not a.is_private
         -- Student ideas only show to people in the same world (real students vs demo/guests).
         and (a.created_by is null or a.created_by = v_me
              or (select real_only from profiles where id = a.created_by) = me.real_only)
@@ -455,12 +456,16 @@ begin
                           or exists (select 1 from squads ps
                                      join squad_members a1 on a1.squad_id = ps.id and a1.user_id = v_me and a1.status = 'accepted'
                                      join squad_members a2 on a2.squad_id = ps.id and a2.user_id = m.user_id and a2.status = 'accepted'
-                                     where ps.status = 'completed') then
+                                     where ps.status = 'completed')
+                          -- …or they're your friend (you added each other's code)
+                          or exists (select 1 from friendships fr
+                                     where fr.a = least(v_me, m.user_id) and fr.b = greatest(v_me, m.user_id)) then
                      jsonb_build_object(
                        'id', p.id, 'name', p.display_name, 'initials', p.initials,
                        'avatar_color', p.avatar_color, 'degree', p.degree, 'degree_short', p.degree_short,
                        'year', p.year, 'status_quote', p.status_quote,
                        'is_me', m.user_id = v_me, 'status', m.status, 'hidden', false, 'go_ahead', m.go_ahead,
+                       'avatar_url', p.avatar_url,
                        'checked_in', m.checked_in_at is not null)
                    else
                      jsonb_build_object(
@@ -620,6 +625,7 @@ begin
       'year', p.year, 'vibe', p.vibe, 'status_quote', p.status_quote, 'group_pref', p.group_pref, 'real_only', p.real_only,
       'interests', to_jsonb(p.interests),
       'onboarded', p.onboarded_at is not null,
+      'friend_code', p.friend_code, 'avatar_url', p.avatar_url,
       'email', (select coalesce(email, '') from auth.users where id = v_me),
       'is_guest', (select coalesce(is_anonymous, false) from auth.users where id = v_me),
       'courses', coalesce((select jsonb_agg(course order by course) from profile_courses where user_id = v_me), '[]'),
@@ -709,6 +715,7 @@ begin
   delete from reports where reporter_id = v_me;
   delete from activities where created_by = v_me;
   delete from member_ratings where ratee_id = v_me;
+  delete from friendships where a = v_me or b = v_me;
   -- Demo accounts always go back to demo mode (simulated students on).
   update profiles set real_only = false
   where id = v_me and (select email from auth.users where id = v_me) ilike '%@pool.demo';
@@ -736,6 +743,7 @@ begin
     year         = coalesce((p->>'year')::smallint, year),
     group_pref   = coalesce(nullif(p->>'group_pref', ''), group_pref),
     real_only    = coalesce((p->>'real_only')::boolean, real_only),
+    avatar_url   = case when p ? 'avatar_url' then nullif(p->>'avatar_url', '') else avatar_url end,
     vibe         = case when p ? 'vibe' then nullif(trim(p->>'vibe'), '') else vibe end,
     status_quote = case when p ? 'status_quote' then nullif(trim(p->>'status_quote'), '') else status_quote end,
     interests    = case when p ? 'interests' then array(select jsonb_array_elements_text(p->'interests')) else interests end,
@@ -809,7 +817,7 @@ begin
   return coalesce((
     select jsonb_agg(jsonb_build_object(
       'id', m.id, 'body', m.body, 'created_at', m.created_at, 'is_me', m.user_id = auth.uid(),
-      'name', p.display_name, 'initials', p.initials, 'avatar_color', p.avatar_color) order by m.id)
+      'name', p.display_name, 'initials', p.initials, 'avatar_color', p.avatar_color, 'avatar_url', p.avatar_url) order by m.id)
     from messages m join profiles p on p.id = m.user_id
     where m.squad_id = p_squad and m.id > p_after
   ), '[]'::jsonb);
@@ -850,16 +858,20 @@ declare
 begin
   if v_me is null then raise exception 'not signed in'; end if;
   return coalesce((
-    select jsonb_agg(c order by last_at desc)
+    select jsonb_agg(c order by sort_at desc nulls last)
     from (
-      select x.last_at,
+      select coalesce(x.last_at, f.created_at) as sort_at,
              jsonb_build_object(
                'id', p.id, 'name', p.display_name, 'initials', p.initials, 'avatar_color', p.avatar_color,
+               'avatar_url', p.avatar_url,
                'degree_short', p.degree_short, 'year', p.year, 'status_quote', p.status_quote,
-               'sessions_together', x.n, 'last_activity', x.last_title, 'last_squad_id', x.last_squad,
+               'sessions_together', coalesce(x.n, 0), 'last_activity', x.last_title, 'last_squad_id', x.last_squad,
+               'is_friend', f.a is not null,
                'shared_interests', to_jsonb(array(select unnest(p.interests) intersect select unnest(me.interests)))
              ) as c
-      from (
+      from profiles p
+      cross join (select coalesce(interests, '{}') as interests from profiles where id = v_me) me
+      left join (
         select other.user_id as uid, count(*) as n, max(s.ends_at) as last_at,
                (array_agg(a.title order by s.ends_at desc))[1] as last_title,
                (array_agg(s.id order by s.ends_at desc))[1] as last_squad
@@ -869,13 +881,15 @@ begin
         join squad_members other on other.squad_id = s.id and other.user_id <> v_me and other.status = 'accepted'
         where s.status = 'completed'
         group by other.user_id
-      ) x
-      join profiles p on p.id = x.uid
-      cross join (select coalesce(interests, '{}') as interests from profiles where id = v_me) me
-      where (select avg(score) from member_ratings where rater_id = v_me and ratee_id = x.uid) >= 4
-        and (select avg(score) from member_ratings where rater_id = x.uid and ratee_id = v_me) >= 4
-        and not exists (select 1 from reports r where (r.reporter_id = v_me and r.reported_id = x.uid)
-                                                   or (r.reporter_id = x.uid and r.reported_id = v_me))
+      ) x on x.uid = p.id
+      left join friendships f on f.a = least(v_me, p.id) and f.b = greatest(v_me, p.id)
+      where p.id <> v_me
+        and (f.a is not null
+             or (x.uid is not null
+                 and (select avg(score) from member_ratings where rater_id = v_me and ratee_id = p.id) >= 4
+                 and (select avg(score) from member_ratings where rater_id = p.id and ratee_id = v_me) >= 4))
+        and not exists (select 1 from reports r where (r.reporter_id = v_me and r.reported_id = p.id)
+                                                   or (r.reporter_id = p.id and r.reported_id = v_me))
     ) q
   ), '[]'::jsonb);
 end $$;
@@ -922,7 +936,7 @@ begin
       union all select v_course where v_course is not null
     ) z where t is not null limit 5);
 
-  insert into activities (id, kind, squad_type, title, description, course, category, tags, icon, duration_mins, created_by)
+  insert into activities (id, kind, squad_type, title, description, course, category, tags, icon, duration_mins, created_by, is_private)
   values (v_id, 'interest',
           coalesce(nullif(p->>'squad_type', ''), 'hobby'),
           v_title,
@@ -932,7 +946,13 @@ begin
           v_tags,
           left(coalesce(nullif(p->>'icon', ''), 'sparkles'), 40),
           coalesce((p->>'duration_mins')::int, 90),
-          v_me);
+          v_me,
+          coalesce((p->>'private')::boolean, false));
+
+  -- A private plan for friends: the app books it with plan_with, no strangers.
+  if coalesce((p->>'private')::boolean, false) then
+    return jsonb_build_object('activity_id', v_id, 'squad_id', null);
+  end if;
 
   -- You're obviously in for your own idea — try to form a squad straight away.
   insert into swipes (user_id, activity_id, decision) values (v_me, v_id, 'in');
@@ -1038,15 +1058,19 @@ declare
 begin
   if coalesce(array_length(p_users, 1), 0) = 0 then raise exception 'Pick someone to plan with'; end if;
   foreach u in array p_users loop
-    if not exists (
-      select 1 from squads s
-      join squad_members a on a.squad_id = s.id and a.user_id = v_me and a.status = 'accepted'
-      join squad_members b on b.squad_id = s.id and b.user_id = u and b.status = 'accepted'
-      where s.status = 'completed'
-    ) or coalesce((select avg(score) from member_ratings where rater_id = v_me and ratee_id = u), 0) < 4
-      or exists (select 1 from reports r where (r.reporter_id = v_me and r.reported_id = u)
-                                            or (r.reporter_id = u and r.reported_id = v_me)) then
-      raise exception 'You can only plan with people you''ve met and rated 4★+';
+    if exists (select 1 from reports r where (r.reporter_id = v_me and r.reported_id = u)
+                                          or (r.reporter_id = u and r.reported_id = v_me))
+       or not (
+         -- a friend you added with their code…
+         exists (select 1 from friendships where a = least(v_me, u) and b = greatest(v_me, u))
+         -- …or someone you've met and rated 4★+
+         or (exists (
+               select 1 from squads s
+               join squad_members a on a.squad_id = s.id and a.user_id = v_me and a.status = 'accepted'
+               join squad_members b on b.squad_id = s.id and b.user_id = u and b.status = 'accepted'
+               where s.status = 'completed')
+             and coalesce((select avg(score) from member_ratings where rater_id = v_me and ratee_id = u), 0) >= 4)) then
+      raise exception 'You can only plan with friends or people you''ve met and rated 4★+';
     end if;
   end loop;
 end $$;
@@ -1152,11 +1176,17 @@ begin
 end $$;
 
 -- Book the option you picked.
-create or replace function public.plan_with(p_activity text, p_users uuid[], p_at timestamptz, p_rebook_of uuid default null)
+create or replace function public.plan_with(p_activity text, p_users uuid[], p_at timestamptz default null, p_rebook_of uuid default null)
 returns uuid language plpgsql security definer set search_path = public as $$
+declare
+  v_squad uuid;
 begin
   perform pool_check_people(p_users);
-  return form_squad(p_activity, p_users, case when is_squad_member(p_rebook_of) then p_rebook_of end, p_at);
+  v_squad := form_squad(p_activity, p_users, case when is_squad_member(p_rebook_of) then p_rebook_of end, p_at);
+  -- You made the plan, so you're in.
+  update squad_members set status = 'accepted', responded_at = now()
+  where squad_id = v_squad and user_id = auth.uid();
+  return v_squad;
 end $$;
 
 -- ---------------------------------------------------------------------
@@ -1228,3 +1258,36 @@ begin
   from profiles p where p.id = m.user_id and p.is_seed and m.squad_id = p_squad and m.status = 'accepted';
   insert into messages (squad_id, user_id, body) values (p_squad, v_me, '📍 I''m here!');
 end $$;
+
+-- ---------------------------------------------------------------------
+-- Friends: added only with each other's friend code (no search, no browsing).
+-- ---------------------------------------------------------------------
+create or replace function public.add_friend(p_code text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_me    uuid := auth.uid();
+  me      profiles%rowtype;
+  other   profiles%rowtype;
+begin
+  if v_me is null then raise exception 'not signed in'; end if;
+  select * into me from profiles where id = v_me;
+  select * into other from profiles where friend_code = upper(trim(p_code));
+  if not found then raise exception 'No one has that code — check the letters'; end if;
+  if other.id = v_me then raise exception 'That''s your own code'; end if;
+  if other.is_seed or other.real_only <> me.real_only then
+    raise exception '%', case when me.real_only
+      then 'That code belongs to a demo account'
+      else 'That''s a real student — switch on "Real people only" to add real friends' end;
+  end if;
+  if exists (select 1 from reports r where (r.reporter_id = v_me and r.reported_id = other.id)
+                                        or (r.reporter_id = other.id and r.reported_id = v_me)) then
+    raise exception 'You can''t add this person';
+  end if;
+  insert into friendships (a, b) values (least(v_me, other.id), greatest(v_me, other.id)) on conflict do nothing;
+  return jsonb_build_object('id', other.id, 'name', other.display_name);
+end $$;
+
+create or replace function public.remove_friend(p_user uuid)
+returns void language sql security definer set search_path = public as $$
+  delete from friendships where a = least(auth.uid(), p_user) and b = greatest(auth.uid(), p_user);
+$$;

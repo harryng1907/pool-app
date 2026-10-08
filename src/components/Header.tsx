@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { THEME } from '../theme';
 import { ScreenType } from '../types';
+import { AvatarPhoto } from './AvatarPhoto';
 
 interface HeaderProps {
   title: string;
@@ -13,6 +14,7 @@ interface HeaderProps {
   showBack?: boolean;
   initials?: string;
   avatarColor?: string;
+  avatarUrl?: string | null;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -24,6 +26,7 @@ export const Header: React.FC<HeaderProps> = ({
   showBack = false,
   initials = '',
   avatarColor,
+  avatarUrl,
 }) => {
   return (
     <View style={styles.container}>
@@ -76,6 +79,7 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <View style={[styles.avatarCircle, avatarColor ? { backgroundColor: avatarColor } : null]}>
             <Text style={styles.avatarInitials}>{initials}</Text>
+            <AvatarPhoto url={avatarUrl} />
           </View>
           <View style={styles.onlineBadge} />
         </TouchableOpacity>

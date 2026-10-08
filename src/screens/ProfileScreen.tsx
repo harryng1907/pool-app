@@ -7,6 +7,7 @@ import {
   ScrollView,
   Image,
   Switch,
+  TextInput,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +15,7 @@ import { THEME } from '../theme';
 import { Connection, Me } from '../types';
 import { yearLabel } from '../lib/format';
 import { INTERESTS } from '../lib/catalog';
+import { AvatarPhoto } from '../components/AvatarPhoto';
 
 interface ProfileScreenProps {
   me: Me | null;
@@ -25,6 +27,8 @@ interface ProfileScreenProps {
   onInvite: (c: Connection) => void;
   onToggleRealOnly: (value: boolean) => void;
   onDeleteAccount: () => void;
+  onChangePhoto: () => void;
+  onAddFriend: (code: string) => Promise<string>;
   onSignOut: () => void;
 }
 
@@ -33,6 +37,75 @@ const hour = (h: number) => (h === 12 ? '12pm' : h > 12 ? `${h - 12}pm` : `${h}a
 const GROUP_PREF = { one: 'Just one person', small: 'A small group (3–4)', any: 'Either is fine' };
 
 // Only you can see this page. Squad-mates see your name, degree and status line after a squad confirms.
+const FriendCode: React.FC<{ code: string; busy: boolean; onAdd: (code: string) => Promise<string> }> = ({
+  code,
+  busy,
+  onAdd,
+}) => {
+  const [value, setValue] = useState('');
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const submit = async () => {
+    try {
+      const name = await onAdd(value);
+      setMsg({ ok: true, text: `${name} added — find them in Your people` });
+      setValue('');
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : 'Could not add friend' });
+    }
+  };
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardTitleRow}>
+        <Text style={[styles.cardTitle, { marginBottom: 0 }]}>Add friends</Text>
+        <Ionicons name="person-add" size={18} color={THEME.colors.deepTeal} />
+      </View>
+      <View style={styles.codeRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.codeLabel}>YOUR CODE</Text>
+          <Text style={styles.codeValue}>{code}</Text>
+        </View>
+        <TouchableOpacity
+          style={styles.copyBtn}
+          onPress={() => {
+            try {
+              (globalThis as any).navigator?.clipboard?.writeText(code);
+            } catch {}
+            setCopied(true);
+          }}
+          accessibilityLabel="Copy your friend code"
+        >
+          <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={16} color={THEME.colors.deepTeal} />
+          <Text style={styles.copyText}>{copied ? 'Copied' : 'Copy'}</Text>
+        </TouchableOpacity>
+      </View>
+      <View style={styles.addRow}>
+        <TextInput
+          style={styles.codeInput}
+          placeholder="Friend's code"
+          placeholderTextColor={THEME.colors.textMuted}
+          value={value}
+          onChangeText={(t) => setValue(t.toUpperCase())}
+          autoCapitalize="characters"
+          maxLength={6}
+          onSubmitEditing={() => value.length === 6 && submit()}
+        />
+        <TouchableOpacity
+          style={[styles.addBtn, (value.length !== 6 || busy) && { opacity: 0.4 }]}
+          disabled={value.length !== 6 || busy}
+          onPress={submit}
+          accessibilityLabel="Add friend"
+        >
+          <Ionicons name="add" size={18} color="#FFFFFF" />
+          <Text style={styles.addText}>Add</Text>
+        </TouchableOpacity>
+      </View>
+      {msg && <Text style={[styles.codeMsg, { color: msg.ok ? THEME.colors.successGreen : '#DC2626' }]}>{msg.text}</Text>}
+      <Text style={styles.codeHint}>Only people you give your code to can add you. Nobody can search for you.</Text>
+    </View>
+  );
+};
+
 const DeleteAccount: React.FC<{ busy: boolean; onConfirm: () => void }> = ({ busy, onConfirm }) => {
   const [armed, setArmed] = useState(false);
   return (
@@ -72,6 +145,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onInvite,
   onToggleRealOnly,
   onDeleteAccount,
+  onChangePhoto,
+  onAddFriend,
   onSignOut,
 }) => {
   if (!me) {
@@ -94,6 +169,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         <View style={styles.profileHeaderRow}>
           <View style={[styles.avatarBig, { backgroundColor: me.avatar_color }]}>
             <Text style={styles.avatarBigText}>{me.initials}</Text>
+            <AvatarPhoto url={me.avatar_url} />
+            <TouchableOpacity style={styles.cameraBtn} onPress={onChangePhoto} disabled={busy} accessibilityLabel="Change profile photo">
+              <Ionicons name="camera" size={13} color="#FFFFFF" />
+            </TouchableOpacity>
             <View style={styles.verifiedBadge}>
               <Ionicons name="checkmark" size={12} color="#FFFFFF" />
             </View>
@@ -159,6 +238,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </View>
       </View>
 
+      {/* Add friends by code — no search, no browsing. */}
+      <FriendCode code={me.friend_code} busy={busy} onAdd={onAddFriend} />
+
       {/* Your people: you met, and you BOTH said you'd go again. No friend requests. */}
       <View style={styles.card}>
         <View style={styles.cardTitleRow}>
@@ -180,6 +262,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <View key={c.id} style={styles.personRow}>
               <View style={[styles.personAvatar, { backgroundColor: c.avatar_color }]}>
                 <Text style={styles.personInitials}>{c.initials}</Text>
+                <AvatarPhoto url={c.avatar_url} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.personName}>
@@ -188,7 +271,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 <View style={styles.personSubRow}>
                   <Ionicons name="repeat" size={12} color={THEME.colors.textMuted} />
                   <Text style={styles.personSub} numberOfLines={1}>
-                    {c.sessions_together}× · {c.last_activity}
+                    {c.sessions_together > 0
+                      ? `${c.sessions_together}× · ${c.last_activity}`
+                      : 'Friend · added with code'}
                   </Text>
                 </View>
               </View>
@@ -763,5 +848,96 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  cameraBtn: {
+    position: 'absolute',
+    left: -2,
+    bottom: -2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: THEME.colors.deepTeal,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  codeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: THEME.colors.deepTealLight,
+    borderRadius: 14,
+    padding: 12,
+  },
+  codeLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+    color: THEME.colors.textMuted,
+  },
+  codeValue: {
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: 4,
+    color: THEME.colors.deepTealDark,
+  },
+  copyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: THEME.radii.pill,
+    backgroundColor: THEME.colors.cardWhite,
+  },
+  copyText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: THEME.colors.deepTeal,
+  },
+  addRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
+  },
+  codeInput: {
+    flex: 1,
+    minWidth: 0,
+    width: 0,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 3,
+    color: THEME.colors.textPrimary,
+    backgroundColor: '#FAFAF8',
+  },
+  addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: THEME.colors.primaryOrange,
+  },
+  addText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  codeMsg: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+  codeHint: {
+    fontSize: 11,
+    color: THEME.colors.textMuted,
+    marginTop: 8,
   },
 });

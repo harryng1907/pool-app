@@ -1,5 +1,7 @@
 // Every call the app makes to the backend lives here.
 // Business logic (matching, privacy, scheduling) runs in Postgres — see supabase/schema.sql.
+import { Platform } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { supabase } from './supabase';
 import { ActivityCard, ActivityInput, Connection, Me, Message, Metrics, Nudge, PlanOption, ProfileInput, Squad } from '../types';
 
@@ -110,6 +112,48 @@ export const getMe = () => rpc<Me | null>('get_me');
 
 export const saveProfile = (input: ProfileInput) => rpc<Me>('save_profile', { p: input });
 
+// On the web, shrink big phone photos to a 512px JPEG before uploading.
+async function shrinkOnWeb(uri: string): Promise<Blob> {
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = new window.Image();
+    el.onload = () => resolve(el);
+    el.onerror = reject;
+    el.src = uri;
+  });
+  const side = Math.min(img.width, img.height);
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = Math.min(512, side);
+  canvas.getContext('2d')!.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, canvas.width, canvas.height);
+  return new Promise((resolve) => canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.85));
+}
+
+/** Pick a photo, upload it (random file name, your own folder), save it on your profile. Null if cancelled. */
+export async function pickAndUploadAvatar(): Promise<Me | null> {
+  const res = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    allowsEditing: true,
+    aspect: [1, 1],
+    quality: 0.6,
+  });
+  if (res.canceled || !res.assets?.length) return null;
+  const asset = res.assets[0];
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) throw new Error('Not signed in');
+
+  const body = Platform.OS === 'web' ? await shrinkOnWeb(asset.uri) : await (await fetch(asset.uri)).arrayBuffer();
+  const contentType = Platform.OS === 'web' ? 'image/jpeg' : asset.mimeType ?? 'image/jpeg';
+  const path = `${auth.user.id}/${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}.jpg`;
+  const { error } = await supabase.storage.from('avatars').upload(path, body, { contentType });
+  if (error) throw new Error(error.message.includes('size') ? 'That photo is too big — try another' : error.message);
+  const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+  return saveProfile({ avatar_url: data.publicUrl });
+}
+
+export const removeAvatar = () => saveProfile({ avatar_url: '' });
+
+/** Add a friend with the code they gave you. */
+export const addFriend = (code: string) => rpc<{ id: string; name: string }>('add_friend', { p_code: code });
+
 // --- Deck -------------------------------------------------------------
 
 export const getDeck = (limit = 20) => rpc<ActivityCard[]>('get_deck', { p_limit: limit });
@@ -165,7 +209,7 @@ export const getPlanOptions = (userIds: string[], rebookOf: string | null) =>
   rpc<PlanOption[]>('suggest_with', { p_users: userIds, p_rebook_of: rebookOf });
 
 /** Book a picked option. Returns the new squad id (null if the time stopped working). */
-export const planWith = (activityId: string, userIds: string[], at: string, rebookOf: string | null) =>
+export const planWith = (activityId: string, userIds: string[], at: string | null, rebookOf: string | null) =>
   rpc<string | null>('plan_with', { p_activity: activityId, p_users: userIds, p_at: at, p_rebook_of: rebookOf });
 
 // --- Your people --------------------------------------------------------

@@ -9,7 +9,7 @@ create extension if not exists pgcrypto with schema extensions;
 create extension if not exists pg_trgm with schema extensions;
 
 drop table if exists
-  public.messages, public.app_events, public.reports, public.venue_ratings, public.member_ratings,
+  public.friendships, public.messages, public.app_events, public.reports, public.venue_ratings, public.member_ratings,
   public.squad_members, public.squads, public.swipes, public.activities,
   public.availability, public.profile_courses, public.profiles, public.venues
   cascade;
@@ -42,6 +42,8 @@ create table public.profiles (
   group_pref    text not null default 'small' check (group_pref in ('one','small','any')),
   interests     text[] not null default '{}',  -- hobbies picked in onboarding (same vocabulary as activity tags)
   real_only     boolean not null default false,  -- never match with simulated students
+  avatar_url    text,                            -- profile photo (shown to squad-mates after reveal)
+  friend_code   text unique default upper(substr(md5(random()::text || clock_timestamp()::text), 1, 6)),
   is_seed       boolean not null default false,  -- simulated students for the demo
   onboarded_at  timestamptz,
   created_at    timestamptz not null default now()
@@ -80,6 +82,7 @@ create table public.activities (
   starts_at      timestamptz,
   capacity       int not null default 4 check (capacity between 2 and 4),
   host           text,   -- society running the event (null for everything else)
+  is_private     boolean not null default false,  -- a plan made for friends; never in anyone's deck
   created_by     uuid references public.profiles(id) on delete cascade,  -- set when a student suggested it
   created_at     timestamptz not null default now()
 );
@@ -166,6 +169,15 @@ create table public.messages (
 create index on public.messages (squad_id, created_at);
 alter table public.messages enable row level security;
 
+-- Friends added with a friend code (stored once per pair, a < b).
+create table public.friendships (
+  a          uuid not null references public.profiles(id) on delete cascade,
+  b          uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (a, b),
+  check (a < b)
+);
+
 create index on public.swipes (activity_id, decision);
 create index on public.activities (created_by, created_at);
 create index on public.squad_members (user_id);
@@ -188,6 +200,7 @@ alter table public.member_ratings  enable row level security;
 alter table public.venue_ratings   enable row level security;
 alter table public.reports         enable row level security;
 alter table public.app_events      enable row level security;
+alter table public.friendships     enable row level security;
 
 create or replace function public.is_squad_member(p_squad uuid)
 returns boolean language sql stable security definer set search_path = public as $$
@@ -212,3 +225,22 @@ create policy "own venue ratings read"   on public.venue_ratings  for select to 
 create policy "file a report"            on public.reports        for insert to authenticated with check (reporter_id = auth.uid());
 create policy "log own events"           on public.app_events     for insert to authenticated with check (user_id = auth.uid());
 
+
+-- ---------------------------------------------------------------------
+-- Profile photo storage
+-- ---------------------------------------------------------------------
+-- Photo storage: public bucket, but file names are random and only shared with squad-mates after reveal.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('avatars', 'avatars', true, 3145728, array['image/jpeg', 'image/png', 'image/webp', 'image/heic'])
+on conflict (id) do update set public = true, file_size_limit = 3145728,
+  allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp', 'image/heic'];
+
+drop policy if exists "avatar upload own folder" on storage.objects;
+drop policy if exists "avatar update own folder" on storage.objects;
+drop policy if exists "avatar delete own folder" on storage.objects;
+create policy "avatar upload own folder" on storage.objects for insert to authenticated
+  with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+create policy "avatar update own folder" on storage.objects for update to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+create policy "avatar delete own folder" on storage.objects for delete to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);

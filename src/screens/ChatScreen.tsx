@@ -14,6 +14,7 @@ import { THEME } from '../theme';
 import { Message, Squad } from '../types';
 import { getMessages, sendMessage } from '../lib/api';
 import { formatWhen } from '../lib/format';
+import { AvatarPhoto } from '../components/AvatarPhoto';
 
 interface ChatScreenProps {
   squad: Squad;
@@ -90,6 +91,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ squad }) => {
               {!m.is_me && (
                 <View style={[styles.avatar, { backgroundColor: m.avatar_color, opacity: showName ? 1 : 0 }]}>
                   <Text style={styles.avatarText}>{m.initials}</Text>
+                  <AvatarPhoto url={m.avatar_url} />
                 </View>
               )}
               <View style={{ maxWidth: '78%' }}>

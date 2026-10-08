@@ -46,6 +46,7 @@ export interface SquadMember {
   hidden: boolean;
   go_ahead: boolean;
   checked_in: boolean;
+  avatar_url?: string | null;
 }
 
 export type SquadStatus = 'proposed' | 'confirmed' | 'completed' | 'cancelled';
@@ -111,6 +112,8 @@ export interface Me {
   onboarded: boolean;
   email: string;
   is_guest: boolean;
+  friend_code: string;
+  avatar_url: string | null;
   courses: string[];
   availability: { dow: number; start: number; end: number }[];
   stats: { swipes: number; squads_done: number; hours: number; people_met: number };
@@ -136,6 +139,7 @@ export interface ProfileInput {
   year?: number;
   group_pref?: 'one' | 'small' | 'any';
   real_only?: boolean;
+  avatar_url?: string;
   vibe?: string;
   status_quote?: string;
   interests?: string[];
@@ -152,6 +156,7 @@ export interface Message {
   name: string;
   initials: string;
   avatar_color: string;
+  avatar_url?: string | null;
 }
 
 // From get_connections — people you've met and both rated 4★+
@@ -164,9 +169,11 @@ export interface Connection {
   year: number;
   status_quote: string | null;
   sessions_together: number;
-  last_activity: string;
-  last_squad_id: string;
+  last_activity: string | null;
+  last_squad_id: string | null;
   shared_interests: string[];
+  avatar_url: string | null;
+  is_friend: boolean;
 }
 
 // Sent to create_activity
@@ -179,6 +186,7 @@ export interface ActivityInput {
   description?: string;
   duration_mins: number;
   tags: string[];
+  private?: boolean; // a plan just for friends — never shown in anyone's deck
 }
 
 // From suggest_with — options when planning again with people you've met

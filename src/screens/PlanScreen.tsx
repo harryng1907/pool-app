@@ -20,10 +20,11 @@ interface PlanScreenProps {
   target: PlanTarget;
   busy: boolean;
   onPick: (option: PlanOption) => void;
+  onCreateOwn: () => void;
 }
 
 // "Plan something with Mei": a few options with times you're all free, not just a repeat.
-export const PlanScreen: React.FC<PlanScreenProps> = ({ target, busy, onPick }) => {
+export const PlanScreen: React.FC<PlanScreenProps> = ({ target, busy, onPick, onCreateOwn }) => {
   const [options, setOptions] = useState<PlanOption[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -103,6 +104,17 @@ export const PlanScreen: React.FC<PlanScreenProps> = ({ target, busy, onPick }) 
         </TouchableOpacity>
       ))}
 
+      <TouchableOpacity style={styles.own} onPress={onCreateOwn} activeOpacity={0.85} accessibilityLabel="Create your own plan">
+        <View style={styles.ownIcon}>
+          <Ionicons name="create" size={22} color="#FFFFFF" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.ownTitle}>Create your own</Text>
+          <Text style={styles.ownSub}>Your idea, just for {who} — we'll find the time and place</Text>
+        </View>
+        <Ionicons name="arrow-forward" size={18} color={THEME.colors.primaryOrange} />
+      </TouchableOpacity>
+
       <Text style={styles.note}>They still get to say yes or no — nobody is booked without agreeing.</Text>
     </ScrollView>
   );
@@ -148,4 +160,14 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 14, color: THEME.colors.textSecondary, textAlign: 'center', lineHeight: 20 },
   note: { fontSize: 12, color: THEME.colors.textMuted, textAlign: 'center', marginTop: 8 },
   error: { color: '#DC2626', marginTop: 16 },
+  own: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 20, marginBottom: 12,
+    borderWidth: 2, borderStyle: 'dashed', borderColor: '#FDBA74', backgroundColor: THEME.colors.primaryOrangeLight,
+  },
+  ownIcon: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: THEME.colors.primaryOrange,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  ownTitle: { fontSize: 16, fontWeight: '800', color: THEME.colors.textPrimary },
+  ownSub: { fontSize: 12, color: THEME.colors.textSecondary, marginTop: 2 },
 });
