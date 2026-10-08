@@ -110,6 +110,9 @@ begin
           and not (me.real_only and (select is_seed from profiles where id = s.user_id))
       ) ic
       where not exists (select 1 from swipes s where s.activity_id = a.id and s.user_id = v_me)
+        -- Student ideas only show to people in the same world (real students vs demo/guests).
+        and (a.created_by is null or a.created_by = v_me
+             or (select real_only from profiles where id = a.created_by) = me.real_only)
       order by rank desc, a.starts_at nulls last, a.id
       limit p_limit
     ) a

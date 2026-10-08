@@ -13,6 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { THEME } from '../theme';
 import { ActivityCard, Nudge, SquadType } from '../types';
 import { formatDuration, formatWhen, SQUAD_TYPE_LABEL } from '../lib/format';
+import { ActivityCover } from '../components/ActivityCover';
+import { ActivityDetailSheet } from '../components/ActivityDetailSheet';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -80,28 +82,34 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
     : cards.filter((c) => c.squad_type === filter);
   const card = visible[0];
   const nudge = nudges[0];
+  const [details, setDetails] = useState<ActivityCard | null>(null);
 
   // Drag the card: right = I'm in, left = Not for me.
   const pan = useRef(new Animated.Value(0)).current;
-  const latest = useRef({ card, busy, onImIn, onNotForMe });
-  latest.current = { card, busy, onImIn, onNotForMe };
+  const latest = useRef({ card, busy, onImIn, onNotForMe, openDetails: (_: ActivityCard) => {} });
+  latest.current = { card, busy, onImIn, onNotForMe, openDetails: setDetails };
 
+  // One gesture handler for the card: a small touch = tap (details), a sideways drag = swipe.
   const responder = useRef(
     PanResponder.create({
+      onStartShouldSetPanResponder: () => !latest.current.busy,
       onMoveShouldSetPanResponder: (_, g) =>
         !latest.current.busy && Math.abs(g.dx) > 8 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
       onPanResponderMove: (_, g) => pan.setValue(g.dx),
       onPanResponderRelease: (_, g) => {
-        const { card: c, onImIn: yes, onNotForMe: no } = latest.current;
+        const { card: c, onImIn: yes, onNotForMe: no, openDetails } = latest.current;
         if (c && Math.abs(g.dx) > SWIPE_DISTANCE) {
           const right = g.dx > 0;
           Animated.timing(pan, { toValue: right ? 600 : -600, duration: 180, useNativeDriver: false }).start(() =>
             right ? yes(c) : no(c),
           );
-        } else {
-          Animated.spring(pan, { toValue: 0, useNativeDriver: false }).start();
+          return;
         }
+        Animated.spring(pan, { toValue: 0, useNativeDriver: false }).start();
+        if (c && Math.abs(g.dx) < 6 && Math.abs(g.dy) < 6) openDetails(c);
       },
+      // Let the page scroll take over for vertical drags.
+      onPanResponderTerminationRequest: (_, g) => Math.abs(g.dx) < 8,
       onPanResponderTerminate: () => Animated.spring(pan, { toValue: 0, useNativeDriver: false }).start(),
     }),
   ).current;
@@ -214,149 +222,128 @@ export const DiscoverScreen: React.FC<DiscoverScreenProps> = ({
               style={[styles.card, { transform: [{ translateX: pan }, { rotate }] }]}
               {...responder.panHandlers}
             >
-              <Animated.View style={[styles.stamp, styles.stampIn, { opacity: inOpacity }]} pointerEvents="none">
-                <Ionicons name="checkmark-circle" size={20} color={THEME.colors.successGreen} />
-                <Text style={[styles.stampText, { color: THEME.colors.successGreen }]}>I'M IN</Text>
-              </Animated.View>
-              <Animated.View style={[styles.stamp, styles.stampNope, { opacity: nopeOpacity }]} pointerEvents="none">
-                <Ionicons name="close-circle" size={20} color="#9CA3AF" />
-                <Text style={[styles.stampText, { color: '#6B7280' }]}>NOT FOR ME</Text>
-              </Animated.View>
-
-              <View style={styles.badgeRow}>
-                {card.host ? (
-                  <View style={[styles.cohortBadge, styles.societyBadge]}>
-                    <Ionicons name="balloon" size={13} color="#7C3AED" />
-                    <Text style={[styles.cohortBadgeText, { color: '#7C3AED' }]} numberOfLines={1}>
-                      {card.host.toUpperCase()}
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={styles.cohortBadge}>
-                    <Ionicons
-                      name={card.course ? 'school' : card.suggested ? 'person' : TYPE_ICON[card.squad_type]}
-                      size={13}
-                      color={THEME.colors.deepTeal}
-                    />
-                    <Text style={styles.cohortBadgeText}>
-                      {card.course ?? (card.suggested ? 'STUDENT IDEA' : SQUAD_TYPE_LABEL[card.squad_type].toUpperCase())}
-                    </Text>
-                  </View>
-                )}
-                <View style={styles.verifiedCampusTag}>
-                  <Ionicons
-                    name={card.kind === 'session' ? 'radio-button-on' : 'sparkles'}
-                    size={13}
-                    color={card.kind === 'session' ? THEME.colors.successGreen : THEME.colors.primaryOrange}
-                  />
-                  <Text style={styles.verifiedCampusText}>
-                    {card.host ? 'Go as a squad' : card.kind === 'session' ? 'Real session' : 'AI picks the time'}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.titleRow}>
-                <View style={styles.cardIcon}>
-                  <Ionicons name={card.icon as IconName} size={26} color={THEME.colors.primaryOrange} />
-                </View>
-                <Text style={styles.cardTitle}>{card.title}</Text>
-              </View>
-
-              <View style={styles.timePlaceBox}>
-                <View style={styles.timePlaceRow}>
-                  <View style={styles.iconCircle}>
-                    <Ionicons name="calendar-outline" size={16} color={THEME.colors.primaryOrange} />
-                  </View>
-                  <Text style={styles.timePlaceText}>
-                    {card.starts_at ? formatWhen(card.starts_at) : 'When your squad is all free'}
-                  </Text>
-                </View>
-
-                <View style={styles.timePlaceRow}>
-                  <View style={styles.iconCircle}>
-                    <Ionicons name="location-outline" size={16} color={THEME.colors.deepTeal} />
-                  </View>
-                  <Text style={styles.timePlaceText} numberOfLines={1}>
-                    {card.venue?.name ?? CATEGORY_PLACE[card.category]}
-                  </Text>
-                  <Text style={styles.timePlaceDot}>·</Text>
-                  <Text style={styles.timePlaceDuration}>{formatDuration(card.duration_mins)}</Text>
-                </View>
-              </View>
-
-              <View style={styles.tagsContainer}>
-                {card.tags
-                  .filter((t) => t !== card.course)
-                  .map((tag) => (
-                    <View key={tag} style={[styles.tagPill, styles.regularTagPill]}>
-                      <Text style={[styles.tagText, styles.regularTagText]}>{tag}</Text>
+              <View accessibilityRole="button" accessibilityLabel={`See details for ${card.title}`}>
+                <ActivityCover icon={card.icon} category={card.category} tags={card.tags} height={300} style={styles.cover}>
+                  <View style={styles.coverTop}>
+                    <View style={styles.glassPill}>
+                      <Ionicons
+                        name={card.host ? 'balloon' : card.course ? 'school' : card.suggested ? 'person' : TYPE_ICON[card.squad_type]}
+                        size={13}
+                        color={card.host ? '#7C3AED' : THEME.colors.deepTeal}
+                      />
+                      <Text style={[styles.glassText, card.host ? { color: '#7C3AED' } : null]} numberOfLines={1}>
+                        {card.host ?? card.course ?? (card.suggested ? 'Student idea' : SQUAD_TYPE_LABEL[card.squad_type])}
+                      </Text>
                     </View>
-                  ))}
-                {card.spots_left != null && (
-                  <View style={[styles.tagPill, styles.spotTagPill]}>
-                    <Ionicons
-                      name="people-outline"
-                      size={12}
-                      color={THEME.colors.primaryOrange}
-                      style={{ marginRight: 4 }}
-                    />
-                    <Text style={[styles.tagText, styles.spotTagText]}>
-                      {card.spots_left} {card.spots_left === 1 ? 'spot' : 'spots'} open
-                    </Text>
+                    {card.kind === 'session' && (
+                      <View style={styles.glassPill}>
+                        <View style={styles.liveDot} />
+                        <Text style={styles.glassText}>Live</Text>
+                      </View>
+                    )}
                   </View>
-                )}
-              </View>
+                  {card.interested_count > 0 && (
+                    <View style={styles.coverBottom}>
+                      <View style={styles.darkPill}>
+                        <Ionicons name="flame" size={13} color="#FDBA74" />
+                        <Text style={styles.darkPillText}>{card.interested_count} in</Text>
+                      </View>
+                    </View>
+                  )}
 
-              {card.description && (
-                <View style={styles.descriptionBox}>
-                  <Text style={styles.descriptionText}>{card.description}</Text>
-                </View>
-              )}
+                  <Animated.View style={[styles.stamp, styles.stampIn, { opacity: inOpacity }]} pointerEvents="none">
+                    <Ionicons name="checkmark-circle" size={22} color={THEME.colors.successGreen} />
+                    <Text style={[styles.stampText, { color: THEME.colors.successGreen }]}>I'M IN</Text>
+                  </Animated.View>
+                  <Animated.View style={[styles.stamp, styles.stampNope, { opacity: nopeOpacity }]} pointerEvents="none">
+                    <Ionicons name="close-circle" size={22} color="#6B7280" />
+                    <Text style={[styles.stampText, { color: '#6B7280' }]}>NOPE</Text>
+                  </Animated.View>
+                </ActivityCover>
 
-              <View style={styles.subtextContainer}>
-                <View style={styles.fireIconWrapper}>
-                  <Ionicons name="flame" size={15} color={THEME.colors.primaryOrange} />
+                <View style={styles.cardBody}>
+                  <Text style={styles.cardTitle} numberOfLines={2}>{card.title}</Text>
+                  <View style={styles.metaRow}>
+                    <View style={styles.meta}>
+                      <Ionicons name="calendar-outline" size={15} color={THEME.colors.primaryOrange} />
+                      <Text style={styles.metaText} numberOfLines={1}>
+                        {card.starts_at ? formatWhen(card.starts_at).replace(/^(\w{3})\w*/, '$1') : 'Flexible'}
+                      </Text>
+                    </View>
+                    <View style={styles.meta}>
+                      <Ionicons name="time-outline" size={15} color={THEME.colors.textSecondary} />
+                      <Text style={styles.metaText}>{formatDuration(card.duration_mins)}</Text>
+                    </View>
+                    {card.spots_left != null && (
+                      <View style={styles.meta}>
+                        <Ionicons name="people-outline" size={15} color={THEME.colors.deepTeal} />
+                        <Text style={styles.metaText}>{card.spots_left} left</Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={styles.moreRow}>
+                    <Ionicons name="location-outline" size={14} color={THEME.colors.textMuted} />
+                    <Text style={styles.moreText} numberOfLines={1}>
+                      {card.venue?.name ?? CATEGORY_PLACE[card.category]}
+                    </Text>
+                    <View style={styles.detailsLink}>
+                      <Text style={styles.detailsText}>Details</Text>
+                      <Ionicons name="chevron-up" size={14} color={THEME.colors.deepTeal} />
+                    </View>
+                  </View>
                 </View>
-                <Text style={styles.subtext}>
-                  {card.interested_count === 0
-                    ? 'Be the first to say yes'
-                    : `${card.interested_count} student${card.interested_count === 1 ? '' : 's'} said "I'm in"`}
-                </Text>
               </View>
             </Animated.View>
           </View>
 
-          <View style={styles.actionsContainer}>
+          <View style={styles.roundRow}>
             <TouchableOpacity
-              style={[styles.notForMeButton, busy && styles.disabled]}
+              style={[styles.roundBtn, styles.roundNope, busy && styles.disabled]}
               onPress={() => onNotForMe(card)}
               disabled={busy}
-              activeOpacity={0.7}
+              activeOpacity={0.75}
               accessibilityLabel="Not for me, show next activity"
             >
-              <Ionicons name="close" size={20} color={THEME.colors.grayButtonText} />
-              <Text style={styles.notForMeText}>Not for me</Text>
+              <Ionicons name="close" size={32} color="#EF4444" />
             </TouchableOpacity>
-
             <TouchableOpacity
-              style={[styles.imInButton, busy && styles.disabled]}
+              style={[styles.roundBtn, styles.roundInfo]}
+              onPress={() => setDetails(card)}
+              activeOpacity={0.75}
+              accessibilityLabel="Show details"
+            >
+              <Ionicons name="information" size={24} color={THEME.colors.deepTeal} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.roundBtn, styles.roundYes, busy && styles.disabled]}
               onPress={() => onImIn(card)}
               disabled={busy}
               activeOpacity={0.85}
               accessibilityLabel="I'm in, find me a squad"
             >
-              <Text style={styles.imInText}>I'm in</Text>
-              <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+              <Ionicons name="checkmark" size={36} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         </>
       )}
 
       <View style={styles.hintContainer}>
-        <Text style={styles.hintText}>
-          ← Not for me · swipe · I'm in →{'\n'}Things you'd do, not people.
-        </Text>
+        <Text style={styles.hintText}>Swipe ← nope · I'm in → · tap the card for details</Text>
       </View>
+
+      <ActivityDetailSheet
+        card={details}
+        busy={busy}
+        onClose={() => setDetails(null)}
+        onImIn={(c) => {
+          setDetails(null);
+          onImIn(c);
+        }}
+        onNotForMe={(c) => {
+          setDetails(null);
+          onNotForMe(c);
+        }}
+      />
     </ScrollView>
   );
 };
@@ -429,11 +416,11 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: THEME.colors.cardWhite,
-    borderRadius: THEME.radii.card,
-    padding: 22,
+    borderRadius: 28,
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: THEME.colors.border,
-    ...THEME.shadows.card,
+    ...THEME.shadows.cardHover,
   },
   badgeRow: {
     flexDirection: 'row',
@@ -467,7 +454,6 @@ const styles = StyleSheet.create({
     color: THEME.colors.textSecondary,
   },
   cardTitle: {
-    flex: 1,
     fontSize: 22,
     fontWeight: '800',
     color: THEME.colors.textPrimary,
@@ -753,7 +739,7 @@ const styles = StyleSheet.create({
   },
   stamp: {
     position: 'absolute',
-    top: 18,
+    top: 70,
     zIndex: 10,
     flexDirection: 'row',
     alignItems: 'center',
@@ -793,5 +779,135 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3E8FF',
     flexShrink: 1,
     marginRight: 8,
+  },
+  cover: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+  },
+  coverTop: {
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    right: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  glassPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    flexShrink: 1,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: THEME.radii.pill,
+  },
+  glassText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: THEME.colors.deepTeal,
+  },
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: THEME.colors.successGreen,
+  },
+  coverBottom: {
+    position: 'absolute',
+    left: 14,
+    bottom: 14,
+  },
+  darkPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(14,23,38,0.55)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: THEME.radii.pill,
+  },
+  darkPillText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  cardBody: {
+    padding: 18,
+    paddingTop: 16,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+    marginTop: 8,
+  },
+  meta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  metaText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: THEME.colors.textPrimary,
+  },
+  moreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: THEME.colors.borderLight,
+  },
+  moreText: {
+    flex: 1,
+    fontSize: 13,
+    color: THEME.colors.textSecondary,
+  },
+  detailsLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  detailsText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: THEME.colors.deepTeal,
+  },
+  roundRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 22,
+    marginTop: 4,
+    marginBottom: 10,
+  },
+  roundBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+    backgroundColor: THEME.colors.cardWhite,
+    ...THEME.shadows.card,
+  },
+  roundNope: {
+    width: 66,
+    height: 66,
+    borderWidth: 2,
+    borderColor: '#FECACA',
+  },
+  roundInfo: {
+    width: 48,
+    height: 48,
+    borderWidth: 1.5,
+    borderColor: THEME.colors.border,
+  },
+  roundYes: {
+    width: 76,
+    height: 76,
+    backgroundColor: THEME.colors.primaryOrange,
+    ...THEME.shadows.buttonOrange,
   },
 });
