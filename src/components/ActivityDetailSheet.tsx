@@ -30,6 +30,8 @@ export const ActivityDetailSheet: React.FC<Props> = ({ card, busy, onClose, onIm
   <Modal visible={!!card} transparent animationType="slide" onRequestClose={onClose}>
     <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close details" />
     {card && (
+      // Full-width row pinned to the bottom; the sheet sits centred in it at phone width.
+      <View style={styles.sheetRow} pointerEvents="box-none">
       <View style={styles.sheet}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 12 }}>
           <ActivityCover icon={card.icon} category={card.category} tags={card.tags} height={190} style={styles.cover}>
@@ -131,6 +133,7 @@ export const ActivityDetailSheet: React.FC<Props> = ({ card, busy, onClose, onIm
           </TouchableOpacity>
         </View>
       </View>
+      </View>
     )}
   </Modal>
 );
@@ -149,9 +152,12 @@ const Fact: React.FC<{ icon: IconName; color: string; label: string; sub?: strin
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(14,23,38,0.45)' },
+  sheetRow: {
+    position: 'absolute', left: 0, right: 0, top: '12%', bottom: 0,
+    alignItems: 'center', justifyContent: 'flex-end',
+  },
   sheet: {
-    position: 'absolute', left: 0, right: 0, bottom: 0, maxHeight: '88%',
-    width: '100%', maxWidth: 480, alignSelf: 'center',
+    width: '100%', maxWidth: 480, maxHeight: '100%',
     backgroundColor: THEME.colors.background, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden',
   },
   cover: { borderTopLeftRadius: 28, borderTopRightRadius: 28 },
